@@ -4,7 +4,9 @@ on:
   push:
     branches: [ master, main, 'claude/**' ]
     tags: [ 'v*' ]
+    paths-ignore: [ 'windows/**', '**.md', 'pics/**' ]
   pull_request:
+    paths-ignore: [ 'windows/**', '**.md', 'pics/**' ]
   workflow_dispatch:
     inputs:
       zerotier_controller:

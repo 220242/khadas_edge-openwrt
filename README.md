@@ -73,6 +73,24 @@ OW_REL=v25.12.5 JOBS=8 ./openwrt/build.sh
   `khadas-wifi-autoconf` (Wi-Fi AP setup), `khadas-edge-wifi-firmware` (AP6356S firmware)
 + [openwrt/files](openwrt/files) - rootfs overlay
 
+## Build on Windows 11
+
+`windows/build-khadas-edge.ps1` does everything on the `D:` drive: enables WSL2 (asks for admin rights and a
+reboot only if WSL is missing, continues after the reboot by itself), downloads the official Ubuntu 24.04 WSL
+image (SHA256 checked) to `D:\KhadasEdgeBuild\wsl`, installs the build dependencies, fetches the project and
+builds. Images: `D:\KhadasEdgeBuild\out`, logs: `D:\KhadasEdgeBuild\logs`. Needs ~60 GB free on `D:`.
+
+PowerShell:
+
+```
+iwr https://raw.githubusercontent.com/220242/khadas_edge-openwrt/claude/festive-pasteur-grk0sc/windows/build-khadas-edge.ps1 -OutFile D:\build-khadas-edge.ps1
+powershell -ExecutionPolicy Bypass -File D:\build-khadas-edge.ps1
+```
+
+or double click `windows\build-khadas-edge.cmd` in a checkout. Options: `-Root E:\dir`, `-Jobs 8`,
+`-Clean`, `-NoBuild` (only prepare, then `make menuconfig` in `\\wsl$\khadas-build\home\builder\khadas_edge-openwrt\build\openwrt`),
+`-ZtController`, `-Uninstall`. Running it again updates the project and rebuilds only what changed.
+
 ## Installation
 
 write image to SD card or eMMC
