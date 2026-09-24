@@ -32,8 +32,13 @@ Khadas Edge boards added as OpenWrt devices, kernel built with **KVM**.
   + arm64 guests with UEFI (Debian, Ubuntu, Alpine, OpenWrt ...), install from ISO
   + virtio disk / network (bridged to `br-lan`), VNC screen, autostart
 + **Containers**
-  + Docker + docker-compose, LuCI `Docker` (luci-app-dockerman)
+  + **one click Docker apps** - `Services → Docker Apps`: catalog of 20 apps (Portainer, Home Assistant,
+    AdGuard Home, Nextcloud, Jellyfin, Syncthing, Vaultwarden, qBittorrent, Nginx Proxy Manager, WireGuard Easy, ...),
+    Docker Hub search with automatic ports / volumes, any registry image, docker-compose URL or paste
+  + Docker + docker-compose, LuCI `Docker` (luci-app-dockerman) for advanced management
   + LXC, LuCI `Services → LXC Containers`
++ **Storage** - `System → Storage & Install`: install OpenWrt to a USB SSD / NVMe / eMMC / SD card,
+  boot from USB / NVMe, expand the root filesystem to the whole disk, see [Storage](#storage-usb-ssd-nvme)
 + storage: NVMe (Edge-Captain M.2), USB, ext4 / btrfs, 2 GB root partition
 
 ## Images
@@ -63,7 +68,8 @@ OW_REL=v25.12.5 JOBS=8 ./openwrt/build.sh
 + [openwrt/patches](openwrt/patches) - Khadas Edge devices, KVM kernel config, QEMU for rockchip
 + [openwrt/diffconfig](openwrt/diffconfig) - package selection
 + [openwrt/feed](openwrt/feed) - own packages:
-  `luci-app-kvm` (VM manager), `luci-app-zt-gateway` (ZeroTier gateway),
+  `luci-app-kvm` (VM manager), `luci-app-zt-gateway` (ZeroTier gateway), `luci-app-docker-apps`
+  (one click Docker apps), `khadas-storage` + `luci-app-khadas-storage` (install to disk, expand root),
   `khadas-wifi-autoconf` (Wi-Fi AP setup), `khadas-edge-wifi-firmware` (AP6356S firmware)
 + [openwrt/files](openwrt/files) - rootfs overlay
 
@@ -97,6 +103,33 @@ CD image, VNC display `0`, enable `Run`, `Save & Apply`, connect VNC client to `
 
 RK3399 is big.LITTLE (4x Cortex-A53 + 2x Cortex-A72): KVM vCPUs are pinned to one
 core type with `CPU affinity` (default `4-5`, A72).
+
+## Storage: USB SSD, NVMe
+
+`System → Storage & Install`
+
++ **Install OpenWrt to disk**: USB SSD, NVMe (Edge-Captain M.2), eMMC or SD card; source is a copy of
+  the running system or an uploaded `sysupgrade.img.gz` (checked against the board). Settings are kept,
+  the root partition uses the whole disk, the disk gets its own disk ID (two disks with the same image would
+  otherwise have the same root `PARTUUID`).
++ **Boot from NVMe / USB disk**: the RK3399 boot ROM starts only from SPI flash, eMMC or SD card, so the
+  boot loader stays there. With this option the boot script on the eMMC / SD card starts OpenWrt from an
+  NVMe or USB disk when one is connected (`nvme 0`, `usb 0..3`), otherwise OpenWrt on the eMMC / SD card.
+  Typical setup: flash the image to the SD card or eMMC, boot, install to the USB SSD with
+  "Boot from this disk", reboot. The kernel has USB storage, UAS and NVMe built in (root on USB / NVMe).
++ **Expand root to the whole disk**: grows the root partition, the overlay filesystem (f2fs / ext4) is
+  resized on the next boot before it is mounted. Docker images and VM disks can use the whole disk.
+
+## Docker apps
+
+`Services → Docker Apps`:
+
++ catalog: one click install, `docker-compose.yml` can be edited before the install, data in `/opt/docker-apps/<name>/`
++ Docker Hub search → Install: the image is pulled, exposed ports and volumes are detected and a
+  compose file is generated (ports 22 / 53 / 80 / 443 are used by the router and move to 8022 / 8053 / 8080 / 8443)
++ any registry image (`ghcr.io/…`, `lscr.io/…`, `quay.io/…`), a `docker-compose.yml` URL or pasted YAML
++ start / stop / update (pull + recreate) / logs / delete for installed apps
++ published ports are reachable from the LAN (Docker blocks WAN by default)
 
 ## Wi-Fi
 

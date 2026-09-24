@@ -1,0 +1,26 @@
+{
+	"luci-app-docker-apps": {
+		"description": "Grant access to one click Docker apps",
+		"read": {
+			"file": {
+				"/usr/share/docker-apps/catalog.json": [ "read" ],
+				"/usr/libexec/docker-apps list": [ "exec" ],
+				"/usr/libexec/docker-apps job *": [ "exec" ],
+				"/usr/libexec/docker-apps logs *": [ "exec" ],
+				"/usr/libexec/docker-apps search *": [ "exec" ],
+				"/usr/libexec/docker-apps fetch *": [ "exec" ],
+				"/usr/libexec/docker-apps image-info *": [ "exec" ]
+			},
+			"uci": [ "system" ]
+		},
+		"write": {
+			"file": {
+				"/tmp/docker-apps/upload/*": [ "write" ],
+				"/usr/libexec/docker-apps install *": [ "exec" ],
+				"/usr/libexec/docker-apps pull *": [ "exec" ],
+				"/usr/libexec/docker-apps action *": [ "exec" ],
+				"/usr/libexec/docker-apps docker-start": [ "exec" ]
+			}
+		}
+	}
+}

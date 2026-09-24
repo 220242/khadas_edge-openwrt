@@ -1,0 +1,23 @@
+{
+	"luci-app-khadas-storage": {
+		"description": "Grant access to disk install and root filesystem expansion",
+		"read": {
+			"file": {
+				"/usr/libexec/khadas-storage status": [ "exec" ],
+				"/usr/libexec/khadas-storage job": [ "exec" ]
+			}
+		},
+		"write": {
+			"file": {
+				"/usr/libexec/khadas-storage expand": [ "exec" ],
+				"/usr/libexec/khadas-storage install *": [ "exec" ],
+				"/usr/libexec/khadas-storage bootext enable": [ "exec" ],
+				"/usr/libexec/khadas-storage bootext disable": [ "exec" ],
+				"/tmp/khadas-install/image.img.gz": [ "write" ]
+			},
+			"ubus": {
+				"system": [ "reboot" ]
+			}
+		}
+	}
+}

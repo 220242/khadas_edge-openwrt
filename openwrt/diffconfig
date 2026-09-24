@@ -101,6 +101,8 @@ CONFIG_PACKAGE_dockerd=y
 CONFIG_PACKAGE_docker=y
 CONFIG_PACKAGE_docker-compose=y
 CONFIG_PACKAGE_luci-app-dockerman=y
+# one click apps: catalog, Docker Hub, compose (Services -> Docker Apps)
+CONFIG_PACKAGE_luci-app-docker-apps=y
 CONFIG_PACKAGE_iptables-nft=y
 CONFIG_PACKAGE_ip6tables-nft=y
 CONFIG_PACKAGE_lxc=y
@@ -128,6 +130,9 @@ CONFIG_PACKAGE_taskset=y
 CONFIG_PACKAGE_kmod-hwmon-pwmfan=y
 
 ## storage
+# install to USB SSD / NVMe / eMMC, boot from USB / NVMe, expand root (System -> Storage & Install)
+CONFIG_PACKAGE_khadas-storage=y
+CONFIG_PACKAGE_luci-app-khadas-storage=y
 CONFIG_PACKAGE_block-mount=y
 CONFIG_PACKAGE_kmod-nvme=y
 CONFIG_PACKAGE_kmod-usb-storage=y

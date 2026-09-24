@@ -1,0 +1,439 @@
+#!/bin/sh
+# Khadas Edge storage helper
+#
+#   khadas-storage status                       JSON: disks, root partition, boot-external state, job
+#   khadas-storage expand                       grow root partition to the end of the disk (fs grows on reboot)
+#   khadas-storage install DISK SOURCE KEEP BOOTEXT
+#                                               SOURCE: system | /tmp/khadas-install/image.img.gz
+#                                               KEEP: 1 keep settings, BOOTEXT: 1 boot from this disk
+#   khadas-storage bootext enable|disable       eMMC / SD: prefer OpenWrt on NVMe / USB
+#   khadas-storage job                          JSON: install job state + log
+#   khadas-storage resize-overlay /dev/PART     (preinit) grow overlay filesystem, not mounted
+
+. /lib/functions.sh
+. /usr/share/libubox/jshn.sh
+
+WORK=/tmp/khadas-install
+JOB_LOG=$WORK/job.log
+JOB_STATE=$WORK/job.state
+BOOT_SCR=/usr/share/khadas-storage/boot-external.scr
+MARKER=khadas_ext
+ALIGN=65536
+MBR_MAX=$((0xffffffff))
+
+log() {
+	echo "$*"
+}
+
+die() {
+	echo "ERROR: $*"
+	exit 1
+}
+
+# --- block device helpers ---
+
+boot_disk() {
+	# prints boot disk name (mmcblk2, sda, nvme0n1)
+	[ -n "$KS_BOOT_DISK" ] && { echo "$KS_BOOT_DISK"; return; }
+	( . /lib/upgrade/common.sh
+	  export_bootdevice && export_partdevice disk 0 && echo "$disk" ) 2>/dev/null
+}
+
+part_name() { # disk n
+	case "$1" in
+		*[0-9]) echo "${1}p$2" ;;
+		*) echo "$1$2" ;;
+	esac
+}
+
+disk_size() { # bytes
+	echo $(( $(cat "/sys/block/$1/size" 2>/dev/null || echo 0) * 512 ))
+}
+
+# partition start / size in sectors from sysfs
+part_start() { cat "/sys/block/$1/$(part_name "$1" "$2")/start" 2>/dev/null; }
+part_sectors() { cat "/sys/block/$1/$(part_name "$1" "$2")/size" 2>/dev/null; }
+
+disk_transport() {
+	local d="$1" path
+	path="$(readlink -f "/sys/block/$d/device" 2>/dev/null)"
+	case "$d" in
+		nvme*) echo nvme ;;
+		mmcblk*)
+			case "$(cat "/sys/block/$d/device/type" 2>/dev/null)" in
+				SD) echo sd ;;
+				*) echo emmc ;;
+			esac
+			;;
+		*)
+			case "$path" in
+				*/usb*) echo usb ;;
+				*) echo sata ;;
+			esac
+			;;
+	esac
+}
+
+list_disks() {
+	local d
+	for d in /sys/block/*; do
+		d="${d##*/}"
+		case "$d" in
+			loop*) [ -n "$KS_TEST" ] || continue ;;
+			ram*|zram*|mtdblock*|ubiblock*|dm-*|md*|mmcblk*boot*|mmcblk*rpmb|nbd*) continue ;;
+		esac
+		[ "$(disk_size "$d")" -gt 0 ] || continue
+		echo "$d"
+	done
+}
+
+disk_in_use() { # mounted / swap / loop backing
+	local d="$1"
+	grep -qE "^/dev/$d(p?[0-9]+)? " /proc/mounts && return 0
+	grep -qE "^/dev/$d(p?[0-9]+)? " /proc/swaps && return 0
+	for f in /sys/block/loop*/loop/backing_file; do
+		[ -f "$f" ] && grep -qE "^/dev/$d(p?[0-9]+)?$" "$f" && return 0
+	done
+	return 1
+}
+
+# squashfs size rounded up to the overlay alignment (fstools ROOTDEV_OVERLAY_ALIGN)
+overlay_offset() { # device
+	local magic used
+	magic="$(dd if="$1" bs=4 count=1 2>/dev/null | hexdump -v -e '4/1 "%02x"')"
+	[ "$magic" = 68737173 ] || return 1
+	set -- $(dd if="$1" bs=1 skip=40 count=8 2>/dev/null | hexdump -v -e '8/1 "%u "')
+	[ $# = 8 ] || return 1
+	used=$(( $1 + ($2 << 8) + ($3 << 16) + ($4 << 24) + ($5 << 32) + ($6 << 40) ))
+	echo $(( (used + ALIGN - 1) / ALIGN * ALIGN ))
+}
+
+fs_type_at() { # device offset
+	local m
+	m="$(dd if="$1" bs=1 skip=$(( $2 + 1024 )) count=4 2>/dev/null | hexdump -v -e '4/1 "%02x"')"
+	[ "$m" = 1020f5f2 ] && { echo f2fs; return; }
+	m="$(dd if="$1" bs=1 skip=$(( $2 + 1080 )) count=2 2>/dev/null | hexdump -v -e '2/1 "%02x"')"
+	[ "$m" = 53ef ] && { echo ext4; return; }
+	echo none
+}
+
+random_disk_id() {
+	hexdump -n 4 -v -e '4/1 "%02x"' /dev/urandom
+}
+
+# boot partition (partition 1, ext4) of OpenWrt disks on eMMC / SD
+openwrt_mmc_bootparts() {
+	local d p
+	for d in $(list_disks); do
+		case "$d" in
+			mmcblk*) ;;
+			loop*) [ -n "$KS_TEST" ] || continue ;;
+			*) continue ;;
+		esac
+		p="$(part_name "$d" 1)"
+		[ -b "/dev/$p" ] || continue
+		echo "$p"
+	done
+}
+
+with_mounted() { # partition dir command...
+	local part="$1" dir="$2" ret opts=rw,noatime
+	shift 2
+	[ -n "$MOUNT_RO" ] && opts=ro
+	mkdir -p "$dir"
+	mount -t ext4 -o "$opts" "/dev/$part" "$dir" 2>/dev/null || return 1
+	"$@"
+	ret=$?
+	sync
+	umount "$dir"
+	return $ret
+}
+
+# --- status ---
+
+bootext_state_one() { # dir
+	[ -f "$1/kernel.img" ] || return 2
+	grep -q "$MARKER" "$1/boot.scr" 2>/dev/null && return 0
+	return 1
+}
+
+status() {
+	local boot d p p1 r start2 size2 end2 dsize free
+
+	boot="$(boot_disk)"
+
+	json_init
+	json_add_string board "$(cat /tmp/sysinfo/board_name 2>/dev/null)"
+	json_add_string boot_disk "$boot"
+
+	json_add_array disks
+	for d in $(list_disks); do
+		json_add_object
+		json_add_string name "$d"
+		json_add_string transport "$(disk_transport "$d")"
+		json_add_string model "$(cat "/sys/block/$d/device/model" 2>/dev/null | sed 's/ *$//')"
+		json_add_string vendor "$(cat "/sys/block/$d/device/vendor" 2>/dev/null | sed 's/ *$//')"
+		json_add_int size "$(disk_size "$d")"
+		json_add_boolean boot "$([ "$d" = "$boot" ] && echo 1 || echo 0)"
+		json_add_boolean in_use "$(disk_in_use "$d" && echo 1 || echo 0)"
+		json_close_object
+	done
+	json_close_array
+
+	if [ -n "$boot" ]; then
+		start2="$(part_start "$boot" 2)"
+		size2="$(part_sectors "$boot" 2)"
+		dsize="$(disk_size "$boot")"
+		end2=$(( (start2 + size2) * 512 ))
+		free=$(( dsize - end2 ))
+		# MBR limit
+		[ $(( dsize / 512 )) -gt "$MBR_MAX" ] && free=$(( (MBR_MAX - start2 - size2) * 512 ))
+		[ "$free" -lt 0 ] && free=0
+		json_add_object root
+		json_add_string partition "$(part_name "$boot" 2)"
+		json_add_int partition_size $(( size2 * 512 ))
+		json_add_int disk_size "$dsize"
+		json_add_int unallocated "$free"
+		json_add_boolean expandable "$([ -z "$(part_start "$boot" 3)" ] && [ "$free" -gt $((64 * 1024 * 1024)) ] && echo 1 || echo 0)"
+		json_add_string overlay_fs "$(awk '$2 == "/overlay" { print $3; exit }' /proc/mounts)"
+		set -- $(df -k /overlay 2>/dev/null | awk 'NR == 2 { print $2, $3, $4 }')
+		json_add_int overlay_size $(( ${1:-0} * 1024 ))
+		json_add_int overlay_used $(( ${2:-0} * 1024 ))
+		json_add_int overlay_free $(( ${3:-0} * 1024 ))
+		p1="$(part_name "$boot" 1)"
+		json_add_boolean expand_pending "$(MOUNT_RO=1 with_mounted "$p1" "$WORK/mnt-status" test -f "$WORK/mnt-status/expand-rootfs" && echo 1 || echo 0)"
+		json_close_object
+	fi
+
+	json_add_array bootext
+	for p in $(openwrt_mmc_bootparts); do
+		d="${p%p1}"
+		# do not touch a mounted boot partition
+		grep -q "^/dev/$p " /proc/mounts && continue
+		MOUNT_RO=1 with_mounted "$p" "$WORK/mnt-status" bootext_state_one "$WORK/mnt-status"
+		r=$?
+		case $r in
+			0|1)
+				json_add_object
+				json_add_string disk "$d"
+				json_add_string transport "$(disk_transport "$d")"
+				json_add_boolean enabled "$([ $r = 0 ] && echo 1 || echo 0)"
+				json_close_object
+				;;
+		esac
+	done
+	json_close_array
+
+	json_add_string job_state "$(cat "$JOB_STATE" 2>/dev/null)"
+	json_dump
+}
+
+job() {
+	json_init
+	json_add_string state "$(cat "$JOB_STATE" 2>/dev/null)"
+	json_add_string log "$(tail -n 60 "$JOB_LOG" 2>/dev/null)"
+	json_dump
+}
+
+# --- expand ---
+
+expand() {
+	local boot start2 size2 p1
+
+	boot="$(boot_disk)"
+	[ -n "$boot" ] || die "boot disk not found"
+	[ -z "$(part_start "$boot" 3)" ] || die "partition 2 is not the last partition"
+	start2="$(part_start "$boot" 2)"
+	size2="$(part_sectors "$boot" 2)"
+	[ -n "$start2" ] && [ -n "$size2" ] || die "root partition not found"
+
+	log "growing /dev/$(part_name "$boot" 2) to the end of /dev/$boot"
+	echo ", +" | sfdisk --force --no-reread --no-tell-kernel -N 2 "/dev/$boot" >/dev/null 2>&1 || \
+		die "sfdisk failed"
+	# tell the kernel the new size of the mounted partition
+	partx -u -n 2 "/dev/$boot" 2>/dev/null
+
+	log "new size: $(( $(part_sectors "$boot" 2) * 512 / 1048576 )) MiB"
+
+	p1="$(part_name "$boot" 1)"
+	with_mounted "$p1" "$WORK/mnt-expand" touch "$WORK/mnt-expand/expand-rootfs" || \
+		die "can not write the flag to /dev/$p1"
+	log "the overlay filesystem grows on the next reboot"
+}
+
+resize_overlay() { # /dev/PART, overlay not mounted (preinit)
+	local dev="$1" offs fs loop ret=0
+
+	offs="$(overlay_offset "$dev")" || die "no squashfs on $dev"
+	fs="$(fs_type_at "$dev" "$offs")"
+	[ "$fs" = none ] && { log "no overlay filesystem yet, nothing to do"; return 0; }
+
+	loop="$(losetup -f)" || die "no free loop device"
+	losetup -o "$offs" "$loop" "$dev" || die "losetup failed"
+
+	case "$fs" in
+		f2fs)
+			fsck.f2fs -a "$loop"
+			resize.f2fs "$loop" || ret=1
+			;;
+		ext4)
+			e2fsck -p -f "$loop"
+			resize2fs "$loop" || ret=1
+			;;
+	esac
+
+	losetup -d "$loop"
+	[ "$ret" = 0 ] && log "$fs overlay on $dev resized" || log "$fs overlay resize failed"
+	return $ret
+}
+
+# --- boot from external disk ---
+
+bootext_enable_one() { # dir
+	[ -f "$1/kernel.img" ] && [ -f "$1/boot.scr" ] || return 1
+	grep -q "$MARKER" "$1/boot.scr" && return 0
+	cp "$1/boot.scr" "$1/boot.scr.openwrt" && cp "$BOOT_SCR" "$1/boot.scr"
+}
+
+bootext_disable_one() { # dir
+	grep -q "$MARKER" "$1/boot.scr" 2>/dev/null || return 0
+	[ -f "$1/boot.scr.openwrt" ] || return 1
+	mv "$1/boot.scr.openwrt" "$1/boot.scr"
+}
+
+bootext() {
+	local p n=0 fn
+	case "$1" in
+		enable) fn=bootext_enable_one ;;
+		disable) fn=bootext_disable_one ;;
+		*) die "usage: bootext enable|disable" ;;
+	esac
+	for p in $(openwrt_mmc_bootparts); do
+		grep -q "^/dev/$p " /proc/mounts && continue
+		if with_mounted "$p" "$WORK/mnt-bootext" $fn "$WORK/mnt-bootext"; then
+			log "$1: /dev/$p"
+			n=$((n + 1))
+		fi
+	done
+	[ "$n" -gt 0 ] || die "no OpenWrt boot partition on eMMC / SD found"
+}
+
+# --- install ---
+
+install_run() { # disk source keep bootext
+	local dst="$1" src="$2" keep="$3" ext="$4"
+	local boot start2 size2 offs sectors
+
+	boot="$(boot_disk)"
+	[ -b "/dev/$dst" ] || die "/dev/$dst is not a block device"
+	[ "$dst" != "$boot" ] || die "/dev/$dst is the running system"
+	disk_in_use "$dst" && die "/dev/$dst is in use (mounted)"
+
+	if [ "$keep" = 1 ]; then
+		log "saving settings"
+		sysupgrade -b "$WORK/backup.tgz" >/dev/null 2>&1 || die "settings backup failed"
+	fi
+
+	if [ "$src" = system ]; then
+		[ -n "$boot" ] || die "boot disk not found"
+		start2="$(part_start "$boot" 2)"
+		offs="$(overlay_offset "/dev/$(part_name "$boot" 2)")" || die "running system has no squashfs root"
+		[ $(( start2 * 512 + offs + 1048576 )) -lt "$(disk_size "$dst")" ] || die "/dev/$dst is too small"
+
+		log "copying boot loader and boot partition from /dev/$boot"
+		dd if="/dev/$boot" of="/dev/$dst" bs=512 count="$start2" conv=fsync 2>/dev/null || die "write failed"
+		echo "PROGRESS 20"
+		log "copying root filesystem ($(( offs / 1048576 )) MiB)"
+		dd if="/dev/$(part_name "$boot" 2)" of="/dev/$dst" bs=$ALIGN count=$(( offs / ALIGN )) \
+			seek=$(( start2 * 512 / ALIGN )) conv=fsync,notrunc 2>/dev/null || die "write failed"
+		# empty overlay: fstools formats a new one on the first boot
+		dd if=/dev/zero of="/dev/$dst" bs=$ALIGN count=16 seek=$(( (start2 * 512 + offs) / ALIGN )) \
+			conv=fsync,notrunc 2>/dev/null
+		# U-Boot environment of the source is not needed
+	else
+		case "$src" in
+			$WORK/*) ;;
+			*) die "invalid image path" ;;
+		esac
+		[ -f "$src" ] || die "image $src not found"
+		# image metadata (sysupgrade.img.gz): check the board
+		if fwtool -q -i "$WORK/meta.json" "$src" 2>/dev/null; then
+			local board="$(cat /tmp/sysinfo/board_name 2>/dev/null)"
+			jsonfilter -i "$WORK/meta.json" -e '@.supported_devices[*]' | grep -qx "$board" || \
+				die "image is not for $board"
+		fi
+		log "writing image to /dev/$dst"
+		( gzip -dc "$src" 2>/dev/null; true ) | dd of="/dev/$dst" bs=1M conv=fsync 2>/dev/null
+		[ "$(dd if="/dev/$dst" bs=2 count=1 skip=255 2>/dev/null | hexdump -v -e '2/1 "%02x"')" = 55aa ] || \
+			die "image write failed (no partition table)"
+	fi
+	echo "PROGRESS 60"
+
+	log "new disk id, root partition uses the whole disk"
+	sfdisk --force --no-reread --no-tell-kernel --disk-id "/dev/$dst" "0x$(random_disk_id)" >/dev/null 2>&1 || \
+		die "can not set the disk id"
+	echo ", +" | sfdisk --force --no-reread --no-tell-kernel -N 2 "/dev/$dst" >/dev/null 2>&1 || \
+		die "can not resize partition 2"
+	sync
+	partx -d - "/dev/$dst" 2>/dev/null
+	partx -a - "/dev/$dst" 2>/dev/null
+	sleep 1
+	echo "PROGRESS 80"
+
+	if [ "$keep" = 1 ]; then
+		with_mounted "$(part_name "$dst" 1)" "$WORK/mnt-install" \
+			cp "$WORK/backup.tgz" "$WORK/mnt-install/sysupgrade.tgz" || die "can not copy settings"
+		log "settings copied"
+	fi
+
+	if [ "$ext" = 1 ]; then
+		case "$dst" in
+			mmcblk*) log "eMMC / SD card boots directly, boot-from-disk not needed" ;;
+			*) bootext enable ;;
+		esac
+	fi
+
+	echo "PROGRESS 100"
+	log "done: OpenWrt installed on /dev/$dst"
+}
+
+install() {
+	[ "$(cat "$JOB_STATE" 2>/dev/null)" = running ] && die "another job is running"
+	mkdir -p "$WORK"
+	echo running > "$JOB_STATE"
+	: > "$JOB_LOG"
+	(
+		if install_run "$@" >> "$JOB_LOG" 2>&1; then
+			echo done > "$JOB_STATE"
+		else
+			echo failed > "$JOB_STATE"
+		fi
+		rm -f "$WORK/backup.tgz" "$WORK/meta.json"
+	) </dev/null >/dev/null 2>&1 &
+	echo '{"result":"started"}'
+}
+
+mkdir -p "$WORK"
+
+case "$1" in
+	status) status ;;
+	job) job ;;
+	expand) expand ;;
+	install)
+		shift
+		echo "$1" | grep -qE '^(sd[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+)$' || \
+			{ [ -n "$KS_TEST" ] && echo "$1" | grep -qE '^loop[0-9]+$'; } || die "invalid disk"
+		install "$1" "${2:-system}" "${3:-1}" "${4:-0}"
+		;;
+	install-run)
+		# foreground, for tests
+		shift
+		install_run "$@"
+		;;
+	bootext) bootext "$2" ;;
+	resize-overlay) resize_overlay "$2" ;;
+	*)
+		echo "usage: $0 status|job|expand|install DISK SOURCE KEEP BOOTEXT|bootext enable|disable" >&2
+		exit 1
+		;;
+esac

@@ -1,0 +1,13 @@
+{
+	"admin/system/khadas-storage": {
+		"title": "Storage & Install",
+		"order": 45,
+		"action": {
+			"type": "view",
+			"path": "khadas-storage"
+		},
+		"depends": {
+			"acl": [ "luci-app-khadas-storage" ]
+		}
+	}
+}

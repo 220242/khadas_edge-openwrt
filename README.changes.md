@@ -19,6 +19,11 @@
   (optional build, non-commercial license)
 + KVM: pmu=off and automatic big.LITTLE CPU pinning
 + PWM fan driver
++ Storage & Install: install to USB SSD / NVMe / eMMC / SD (copy or image, settings kept, unique disk ID),
+  boot from USB / NVMe via the eMMC / SD boot script, expand root partition + overlay to the whole disk
++ kernel: USB UAS built in (root on USB SSD)
++ Docker Apps: one click catalog (20 arm64 apps), Docker Hub search with port / volume detection,
+  any registry image, compose URL / paste
 
 ## OpenWrt Khadas Edge rel 25.12.5
 

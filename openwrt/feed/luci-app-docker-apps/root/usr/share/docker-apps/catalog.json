@@ -1,0 +1,242 @@
+{
+	"version": 1,
+	"apps": [
+		{
+			"id": "portainer",
+			"name": "Portainer",
+			"category": "Management",
+			"description": "Web UI to manage Docker containers, images, volumes and stacks, with its own app templates.",
+			"web": {
+				"port": 9443,
+				"proto": "https"
+			},
+			"notes": "Create the admin user within 5 minutes after the start.",
+			"compose": "services:\n  portainer:\n    image: portainer/portainer-ce:lts\n    container_name: portainer\n    restart: unless-stopped\n    ports:\n      - \"9443:9443\"\n      - \"9000:9000\"\n    volumes:\n      - /var/run/docker.sock:/var/run/docker.sock\n      - ./data:/data\n"
+		},
+		{
+			"id": "homeassistant",
+			"name": "Home Assistant",
+			"category": "Smart home",
+			"description": "Open source home automation: devices, dashboards and automations.",
+			"web": {
+				"port": 8123,
+				"proto": "http"
+			},
+			"notes": "",
+			"compose": "services:\n  homeassistant:\n    image: ghcr.io/home-assistant/home-assistant:stable\n    container_name: homeassistant\n    restart: unless-stopped\n    network_mode: host\n    privileged: true\n    environment:\n      - TZ=${TZ}\n    volumes:\n      - ./config:/config\n"
+		},
+		{
+			"id": "adguardhome",
+			"name": "AdGuard Home",
+			"category": "Network",
+			"description": "Network wide ads and trackers blocking DNS server.",
+			"web": {
+				"port": 3000,
+				"proto": "http"
+			},
+			"notes": "Setup wizard on port 3000, afterwards web UI on port 3080. DNS listens on port 5335: in Network -> DHCP and DNS -> Forwards set 127.0.0.1#5335.",
+			"compose": "services:\n  adguardhome:\n    image: adguard/adguardhome:latest\n    container_name: adguardhome\n    restart: unless-stopped\n    ports:\n      - \"5335:53/udp\"\n      - \"5335:53/tcp\"\n      - \"3000:3000/tcp\"\n      - \"3080:80/tcp\"\n    volumes:\n      - ./work:/opt/adguardhome/work\n      - ./conf:/opt/adguardhome/conf\n"
+		},
+		{
+			"id": "nextcloud",
+			"name": "Nextcloud",
+			"category": "Cloud",
+			"description": "Personal cloud: files, calendar, contacts, photos.",
+			"web": {
+				"port": 8081,
+				"proto": "http"
+			},
+			"notes": "Put the data on a big disk: expand the root filesystem or edit the volume path.",
+			"compose": "services:\n  nextcloud:\n    image: nextcloud:apache\n    container_name: nextcloud\n    restart: unless-stopped\n    ports:\n      - \"8081:80\"\n    environment:\n      - TZ=${TZ}\n    volumes:\n      - ./html:/var/www/html\n"
+		},
+		{
+			"id": "jellyfin",
+			"name": "Jellyfin",
+			"category": "Media",
+			"description": "Media server for movies, series and music.",
+			"web": {
+				"port": 8096,
+				"proto": "http"
+			},
+			"notes": "Media files: /opt/docker-apps/jellyfin/media (or edit the volume to your disk).",
+			"compose": "services:\n  jellyfin:\n    image: jellyfin/jellyfin:latest\n    container_name: jellyfin\n    restart: unless-stopped\n    ports:\n      - \"8096:8096\"\n    environment:\n      - TZ=${TZ}\n    volumes:\n      - ./config:/config\n      - ./cache:/cache\n      - ./media:/media\n"
+		},
+		{
+			"id": "syncthing",
+			"name": "Syncthing",
+			"category": "Cloud",
+			"description": "Continuous file synchronization between devices.",
+			"web": {
+				"port": 8384,
+				"proto": "http"
+			},
+			"notes": "",
+			"compose": "services:\n  syncthing:\n    image: syncthing/syncthing:latest\n    container_name: syncthing\n    hostname: khadas-edge\n    restart: unless-stopped\n    ports:\n      - \"8384:8384\"\n      - \"22000:22000/tcp\"\n      - \"22000:22000/udp\"\n      - \"21027:21027/udp\"\n    environment:\n      - PUID=0\n      - PGID=0\n    volumes:\n      - ./data:/var/syncthing\n"
+		},
+		{
+			"id": "vaultwarden",
+			"name": "Vaultwarden",
+			"category": "Security",
+			"description": "Bitwarden compatible password manager server.",
+			"web": {
+				"port": 8082,
+				"proto": "http"
+			},
+			"notes": "Browsers allow the web vault only over HTTPS: use it behind Nginx Proxy Manager or a VPN.",
+			"compose": "services:\n  vaultwarden:\n    image: vaultwarden/server:latest\n    container_name: vaultwarden\n    restart: unless-stopped\n    ports:\n      - \"8082:80\"\n    volumes:\n      - ./data:/data\n"
+		},
+		{
+			"id": "uptime-kuma",
+			"name": "Uptime Kuma",
+			"category": "Monitoring",
+			"description": "Monitoring of websites, services and devices with notifications.",
+			"web": {
+				"port": 3001,
+				"proto": "http"
+			},
+			"notes": "",
+			"compose": "services:\n  uptime-kuma:\n    image: louislam/uptime-kuma:1\n    container_name: uptime-kuma\n    restart: unless-stopped\n    ports:\n      - \"3001:3001\"\n    volumes:\n      - ./data:/app/data\n"
+		},
+		{
+			"id": "filebrowser",
+			"name": "File Browser",
+			"category": "Cloud",
+			"description": "Web file manager: upload, download, share files.",
+			"web": {
+				"port": 8083,
+				"proto": "http"
+			},
+			"notes": "User admin, the initial password is printed in the logs.",
+			"compose": "services:\n  filebrowser:\n    image: filebrowser/filebrowser:latest\n    container_name: filebrowser\n    restart: unless-stopped\n    user: \"0:0\"\n    ports:\n      - \"8083:80\"\n    volumes:\n      - ./files:/srv\n      - ./database:/database\n      - ./config:/config\n"
+		},
+		{
+			"id": "qbittorrent",
+			"name": "qBittorrent",
+			"category": "Downloads",
+			"description": "BitTorrent client with web UI.",
+			"web": {
+				"port": 8084,
+				"proto": "http"
+			},
+			"notes": "User admin, the temporary password is printed in the logs.",
+			"compose": "services:\n  qbittorrent:\n    image: lscr.io/linuxserver/qbittorrent:latest\n    container_name: qbittorrent\n    restart: unless-stopped\n    ports:\n      - \"8084:8084\"\n      - \"6881:6881\"\n      - \"6881:6881/udp\"\n    environment:\n      - PUID=0\n      - PGID=0\n      - TZ=${TZ}\n      - WEBUI_PORT=8084\n    volumes:\n      - ./config:/config\n      - ./downloads:/downloads\n"
+		},
+		{
+			"id": "transmission",
+			"name": "Transmission",
+			"category": "Downloads",
+			"description": "Lightweight BitTorrent client with web UI.",
+			"web": {
+				"port": 9091,
+				"proto": "http"
+			},
+			"notes": "",
+			"compose": "services:\n  transmission:\n    image: lscr.io/linuxserver/transmission:latest\n    container_name: transmission\n    restart: unless-stopped\n    ports:\n      - \"9091:9091\"\n      - \"51413:51413\"\n      - \"51413:51413/udp\"\n    environment:\n      - PUID=0\n      - PGID=0\n      - TZ=${TZ}\n    volumes:\n      - ./config:/config\n      - ./downloads:/downloads\n      - ./watch:/watch\n"
+		},
+		{
+			"id": "nginx-proxy-manager",
+			"name": "Nginx Proxy Manager",
+			"category": "Network",
+			"description": "Reverse proxy with free Let's Encrypt certificates and web UI.",
+			"web": {
+				"port": 81,
+				"proto": "http"
+			},
+			"notes": "Ports 80/443 are used by LuCI, the proxy listens on 8880/8443 (forward 80/443 from your router).",
+			"compose": "services:\n  nginx-proxy-manager:\n    image: jc21/nginx-proxy-manager:latest\n    container_name: nginx-proxy-manager\n    restart: unless-stopped\n    ports:\n      - \"8880:80\"\n      - \"8443:443\"\n      - \"81:81\"\n    volumes:\n      - ./data:/data\n      - ./letsencrypt:/etc/letsencrypt\n"
+		},
+		{
+			"id": "node-red",
+			"name": "Node-RED",
+			"category": "Smart home",
+			"description": "Flow based programming for IoT and automations.",
+			"web": {
+				"port": 1880,
+				"proto": "http"
+			},
+			"notes": "",
+			"compose": "services:\n  node-red:\n    image: nodered/node-red:latest\n    container_name: node-red\n    restart: unless-stopped\n    user: \"0:0\"\n    ports:\n      - \"1880:1880\"\n    environment:\n      - TZ=${TZ}\n    volumes:\n      - ./data:/data\n"
+		},
+		{
+			"id": "mosquitto",
+			"name": "Mosquitto",
+			"category": "Smart home",
+			"description": "MQTT broker for IoT devices.",
+			"web": null,
+			"notes": "No authentication: MQTT on port 1883 for the local network.",
+			"compose": "services:\n  mosquitto:\n    image: eclipse-mosquitto:latest\n    container_name: mosquitto\n    restart: unless-stopped\n    command: mosquitto -c /mosquitto-no-auth.conf\n    ports:\n      - \"1883:1883\"\n    volumes:\n      - ./data:/mosquitto/data\n"
+		},
+		{
+			"id": "grafana",
+			"name": "Grafana",
+			"category": "Monitoring",
+			"description": "Dashboards and graphs for metrics.",
+			"web": {
+				"port": 3002,
+				"proto": "http"
+			},
+			"notes": "Login admin / admin.",
+			"compose": "services:\n  grafana:\n    image: grafana/grafana-oss:latest\n    container_name: grafana\n    restart: unless-stopped\n    user: \"0:0\"\n    ports:\n      - \"3002:3000\"\n    volumes:\n      - ./data:/var/lib/grafana\n"
+		},
+		{
+			"id": "homepage",
+			"name": "Homepage",
+			"category": "Management",
+			"description": "Start page / dashboard for all your services.",
+			"web": {
+				"port": 3003,
+				"proto": "http"
+			},
+			"notes": "",
+			"compose": "services:\n  homepage:\n    image: ghcr.io/gethomepage/homepage:latest\n    container_name: homepage\n    restart: unless-stopped\n    ports:\n      - \"3003:3000\"\n    environment:\n      - HOMEPAGE_ALLOWED_HOSTS=*\n    volumes:\n      - ./config:/app/config\n      - /var/run/docker.sock:/var/run/docker.sock:ro\n"
+		},
+		{
+			"id": "dozzle",
+			"name": "Dozzle",
+			"category": "Management",
+			"description": "Real time log viewer for Docker containers.",
+			"web": {
+				"port": 8085,
+				"proto": "http"
+			},
+			"notes": "",
+			"compose": "services:\n  dozzle:\n    image: amir20/dozzle:latest\n    container_name: dozzle\n    restart: unless-stopped\n    ports:\n      - \"8085:8080\"\n    volumes:\n      - /var/run/docker.sock:/var/run/docker.sock:ro\n"
+		},
+		{
+			"id": "wg-easy",
+			"name": "WireGuard Easy",
+			"category": "Network",
+			"description": "WireGuard VPN server with web UI and QR codes for clients.",
+			"web": {
+				"port": 51821,
+				"proto": "http"
+			},
+			"notes": "For clients from the internet allow UDP 51820 from WAN (Docker blocks WAN by default: Services -> Docker -> blocked interfaces).",
+			"compose": "services:\n  wg-easy:\n    image: ghcr.io/wg-easy/wg-easy:15\n    container_name: wg-easy\n    restart: unless-stopped\n    environment:\n      - INSECURE=true\n    ports:\n      - \"51820:51820/udp\"\n      - \"51821:51821/tcp\"\n    volumes:\n      - ./data:/etc/wireguard\n      - /lib/modules:/lib/modules:ro\n    cap_add:\n      - NET_ADMIN\n      - SYS_MODULE\n    sysctls:\n      - net.ipv4.ip_forward=1\n      - net.ipv4.conf.all.src_valid_mark=1\n"
+		},
+		{
+			"id": "code-server",
+			"name": "code-server",
+			"category": "Development",
+			"description": "VS Code in the browser.",
+			"web": {
+				"port": 8444,
+				"proto": "https"
+			},
+			"notes": "The password is in /opt/docker-apps/code-server/config/.config/code-server/config.yaml or set PASSWORD in the compose file.",
+			"compose": "services:\n  code-server:\n    image: lscr.io/linuxserver/code-server:latest\n    container_name: code-server\n    restart: unless-stopped\n    ports:\n      - \"8444:8443\"\n    environment:\n      - PUID=0\n      - PGID=0\n      - TZ=${TZ}\n    volumes:\n      - ./config:/config\n"
+		},
+		{
+			"id": "it-tools",
+			"name": "IT Tools",
+			"category": "Development",
+			"description": "Handy online tools for developers (converters, generators, network).",
+			"web": {
+				"port": 8086,
+				"proto": "http"
+			},
+			"notes": "",
+			"compose": "services:\n  it-tools:\n    image: corentinth/it-tools:latest\n    container_name: it-tools\n    restart: unless-stopped\n    ports:\n      - \"8086:80\"\n"
+		}
+	]
+}

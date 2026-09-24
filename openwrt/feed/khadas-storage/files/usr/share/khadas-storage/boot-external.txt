@@ -1,0 +1,45 @@
+# Khadas Edge OpenWrt boot script (eMMC / SD):
+# boot OpenWrt from an NVMe or USB disk when one is present,
+# otherwise continue with OpenWrt on this eMMC / SD card.
+# installed by khadas-storage, original: boot.scr.openwrt
+
+if test -z "${khadas_ext}"; then
+	setenv khadas_ext 1
+	setenv khadas_int_devtype ${devtype}
+	setenv khadas_int_devnum ${devnum}
+
+	pci enum
+	nvme scan
+	if test -e nvme 0:1 kernel.img; then
+		if load nvme 0:1 ${scriptaddr} boot.scr; then
+			echo "Khadas: booting OpenWrt from NVMe"
+			setenv devtype nvme
+			setenv devnum 0
+			source ${scriptaddr}
+		fi
+	fi
+
+	usb start
+	for n in 0 1 2 3; do
+		if test -e usb ${n}:1 kernel.img; then
+			if load usb ${n}:1 ${scriptaddr} boot.scr; then
+				echo "Khadas: booting OpenWrt from USB ${n}"
+				setenv devtype usb
+				setenv devnum ${n}
+				source ${scriptaddr}
+			fi
+		fi
+	done
+
+	echo "Khadas: no OpenWrt on NVMe / USB, booting from ${khadas_int_devtype} ${khadas_int_devnum}"
+	setenv devtype ${khadas_int_devtype}
+	setenv devnum ${khadas_int_devnum}
+fi
+
+part uuid ${devtype} ${devnum}:2 uuid
+
+setenv bootargs "console=ttyS2,1500000 earlycon=uart8250,mmio32,0xff1a0000 root=PARTUUID=${uuid} rw rootwait"
+
+load ${devtype} ${devnum}:1 ${kernel_addr_r} kernel.img
+
+bootm ${kernel_addr_r}

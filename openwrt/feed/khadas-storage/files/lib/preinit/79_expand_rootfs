@@ -1,0 +1,30 @@
+#!/bin/sh
+# khadas-storage: grow the overlay filesystem after the root partition
+# was expanded (flag /expand-rootfs on the boot partition), runs before
+# mount_root while the overlay is not mounted
+
+do_expand_rootfs() {
+	local bootpart rootpart
+
+	[ -x /usr/libexec/khadas-storage ] || return 0
+
+	. /lib/upgrade/common.sh
+	export_bootdevice && \
+		export_partdevice bootpart 1 && \
+		export_partdevice rootpart 2 || return 0
+
+	mount -t ext4 -o rw,noatime "/dev/$bootpart" /mnt 2>/dev/null || return 0
+	if [ ! -f /mnt/expand-rootfs ]; then
+		umount /mnt
+		return 0
+	fi
+	rm -f /mnt/expand-rootfs
+	sync
+	umount /mnt
+
+	echo "- expand rootfs_data on /dev/$rootpart -"
+	/usr/libexec/khadas-storage resize-overlay "/dev/$rootpart" 2>&1 | \
+		while read line; do echo "khadas-storage: $line" > /dev/kmsg; done
+}
+
+boot_hook_add preinit_main do_expand_rootfs

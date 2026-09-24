@@ -1,0 +1,265 @@
+#!/bin/sh
+# One click Docker apps helper
+#
+#   docker-apps list                          JSON: docker state + installed apps
+#   docker-apps install NAME                  install /tmp/docker-apps/upload/NAME.yml (background job)
+#   docker-apps pull IMAGE                    pull an image (background job "pull")
+#   docker-apps image-info IMAGE              JSON: exposed ports / volumes / env of a pulled image
+#   docker-apps action NAME start|stop|restart|update|delete
+#   docker-apps job NAME                      JSON: job state + log
+#   docker-apps logs NAME                     container logs
+#   docker-apps search QUERY                  Docker Hub search (JSON)
+#   docker-apps fetch URL                     download a compose file (text)
+#   docker-apps docker-start                  start dockerd
+
+. /usr/share/libubox/jshn.sh
+
+APPS_DIR="${DOCKER_APPS_DIR:-/opt/docker-apps}"
+WORK=/tmp/docker-apps
+UPLOAD=$WORK/upload
+JOBS=$WORK/jobs
+
+mkdir -p "$UPLOAD" "$JOBS"
+
+die() {
+	echo "ERROR: $*" >&2
+	exit 1
+}
+
+valid_name() {
+	echo "$1" | grep -qE '^[a-z0-9][a-z0-9_-]{0,31}$'
+}
+
+valid_image() {
+	echo "$1" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._/:@+-]{0,254}$'
+}
+
+compose() { # name args...
+	local name="$1"
+	shift
+	docker compose -p "$name" --project-directory "$APPS_DIR/$name" \
+		-f "$APPS_DIR/$name/docker-compose.yml" "$@"
+}
+
+docker_ok() {
+	docker info >/dev/null 2>&1
+}
+
+# run "$@" as background job NAME, log + state in $JOBS
+job_start() { # name command...
+	local name="$1"
+	shift
+	[ "$(cat "$JOBS/$name.state" 2>/dev/null)" = running ] && die "a job for $name is already running"
+	echo running > "$JOBS/$name.state"
+	: > "$JOBS/$name.log"
+	(
+		if "$@" >> "$JOBS/$name.log" 2>&1; then
+			echo done > "$JOBS/$name.state"
+		else
+			echo failed > "$JOBS/$name.state"
+		fi
+	) </dev/null >/dev/null 2>&1 &
+	echo '{"result":"started"}'
+}
+
+job() {
+	valid_name "$1" || die "invalid name"
+	json_init
+	json_add_string state "$(cat "$JOBS/$1.state" 2>/dev/null)"
+	json_add_string log "$(tail -n 80 "$JOBS/$1.log" 2>/dev/null | sed 's/\r/\n/g' | tail -n 80)"
+	json_dump
+}
+
+# --- list ---
+
+list() {
+	local dir name ids states running total ports images
+
+	json_init
+	json_add_boolean docker "$(docker_ok && echo 1 || echo 0)"
+	json_add_string apps_dir "$APPS_DIR"
+	json_add_array apps
+	for dir in "$APPS_DIR"/*/; do
+		[ -f "$dir/docker-compose.yml" ] || continue
+		name="$(basename "$dir")"
+		valid_name "$name" || continue
+
+		running=0
+		total=0
+		ports=""
+		images=""
+		if docker_ok; then
+			while IFS='|' read -r state image p; do
+				[ -n "$state" ] || continue
+				total=$((total + 1))
+				[ "$state" = running ] && running=$((running + 1))
+				images="$images $image"
+				ports="$ports,$p"
+			done <<-EOF
+				$(docker ps -a --filter "label=com.docker.compose.project=$name" --format '{{.State}}|{{.Image}}|{{.Ports}}' 2>/dev/null)
+			EOF
+		fi
+
+		json_add_object
+		json_add_string name "$name"
+		json_add_int running "$running"
+		json_add_int containers "$total"
+		json_add_string job "$(cat "$JOBS/$name.state" 2>/dev/null)"
+		json_add_array images
+		for i in $(echo $images | tr ' ' '\n' | sort -u); do
+			json_add_string "" "$i"
+		done
+		json_close_array
+		# published TCP host ports: "0.0.0.0:8080->80/tcp"
+		json_add_array ports
+		for p in $(echo "$ports" | tr ',' '\n' | sed -n 's#.*:\([0-9]\{1,5\}\)->[0-9]*/tcp.*#\1#p' | sort -un); do
+			json_add_int "" "$p"
+		done
+		json_close_array
+		json_add_boolean host_network "$(grep -qE '^\s*network_mode:\s*"?host' "$dir/docker-compose.yml" && echo 1 || echo 0)"
+		json_close_object
+	done
+	json_close_array
+	json_dump
+}
+
+# --- install ---
+
+install_run() { # name
+	local name="$1" dir="$APPS_DIR/$1"
+	mkdir -p "$dir"
+	mv "$UPLOAD/$name.yml" "$dir/docker-compose.yml"
+	echo "== $name: docker compose up -d"
+	compose "$name" up -d --pull missing --remove-orphans || return 1
+	echo "== $name: started"
+	compose "$name" ps
+}
+
+install() {
+	local name="$1"
+	valid_name "$name" || die "invalid name '$name': lowercase letters, digits, - and _"
+	[ -f "$UPLOAD/$name.yml" ] || die "compose file for $name not uploaded"
+	[ -f "$APPS_DIR/$name/docker-compose.yml" ] && die "app $name is already installed"
+	docker_ok || die "Docker is not running"
+	# validate before starting the job
+	mkdir -p "$APPS_DIR/$name"
+	if ! docker compose -p "$name" --project-directory "$APPS_DIR/$name" -f "$UPLOAD/$name.yml" config -q 2>"$WORK/$name.err"; then
+		rmdir "$APPS_DIR/$name" 2>/dev/null
+		die "invalid compose file: $(cat "$WORK/$name.err")"
+	fi
+	job_start "$name" install_run "$name"
+}
+
+# --- manage ---
+
+action_run() { # name action
+	local name="$1"
+	case "$2" in
+		start) compose "$name" up -d ;;
+		stop) compose "$name" stop ;;
+		restart) compose "$name" restart ;;
+		update)
+			compose "$name" pull && compose "$name" up -d --remove-orphans && \
+				docker image prune -f >/dev/null
+			;;
+		delete)
+			compose "$name" down --volumes --rmi all --remove-orphans
+			rm -rf "${APPS_DIR:?}/$name"
+			echo "== $name deleted"
+			;;
+	esac
+}
+
+action() {
+	local name="$1" act="$2"
+	valid_name "$name" || die "invalid name"
+	[ -f "$APPS_DIR/$name/docker-compose.yml" ] || die "app $name not installed"
+	case "$act" in
+		start|stop|restart|update|delete) ;;
+		*) die "invalid action" ;;
+	esac
+	docker_ok || die "Docker is not running"
+	job_start "$name" action_run "$name" "$act"
+}
+
+logs() {
+	valid_name "$1" || die "invalid name"
+	[ -f "$APPS_DIR/$1/docker-compose.yml" ] || die "app $1 not installed"
+	compose "$1" logs --no-color --tail 200 2>&1
+}
+
+# --- images ---
+
+pull() {
+	valid_image "$1" || die "invalid image name"
+	docker_ok || die "Docker is not running"
+	job_start pull docker pull "$1"
+}
+
+image_info() {
+	local img="$1" ports vols
+	valid_image "$img" || die "invalid image name"
+	ports="$(docker image inspect --format '{{range $p, $_ := .Config.ExposedPorts}}{{$p}} {{end}}' "$img" 2>/dev/null)" || \
+		die "image $img not found"
+	vols="$(docker image inspect --format '{{range $v, $_ := .Config.Volumes}}{{$v}} {{end}}' "$img" 2>/dev/null)"
+
+	json_init
+	json_add_string image "$img"
+	json_add_array ports
+	for p in $ports; do
+		json_add_string "" "$p"
+	done
+	json_close_array
+	json_add_array volumes
+	for v in $vols; do
+		json_add_string "" "$v"
+	done
+	json_close_array
+	json_dump
+}
+
+# --- remote ---
+
+http_get() { # url
+	if command -v curl >/dev/null; then
+		curl -fsSL --max-time 30 "$1"
+	else
+		uclient-fetch -q -T 30 -O - "$1"
+	fi
+}
+
+search() {
+	local q
+	q="$(echo "$1" | tr -cd 'A-Za-z0-9._/ -' | cut -c1-100 | tr ' ' '+')"
+	[ -n "$q" ] || die "empty query"
+	http_get "https://hub.docker.com/v2/search/repositories/?query=$q&page_size=25" 2>/dev/null || \
+		die "Docker Hub search failed (no internet?)"
+}
+
+fetch() {
+	case "$1" in
+		http://*|https://*) ;;
+		*) die "only http / https URLs" ;;
+	esac
+	local out
+	out="$(http_get "$1" 2>/dev/null | head -c 262144)"
+	[ -n "$out" ] || die "download failed"
+	echo "$out"
+}
+
+case "$1" in
+	list) list ;;
+	install) install "$2" ;;
+	pull) pull "$2" ;;
+	image-info) image_info "$2" ;;
+	action) action "$2" "$3" ;;
+	job) job "$2" ;;
+	logs) logs "$2" ;;
+	search) search "$2" ;;
+	fetch) fetch "$2" ;;
+	docker-start) /etc/init.d/dockerd enable; /etc/init.d/dockerd start ;;
+	*)
+		echo "usage: $0 list|install NAME|pull IMAGE|image-info IMAGE|action NAME ACTION|job NAME|logs NAME|search QUERY|fetch URL" >&2
+		exit 1
+		;;
+esac

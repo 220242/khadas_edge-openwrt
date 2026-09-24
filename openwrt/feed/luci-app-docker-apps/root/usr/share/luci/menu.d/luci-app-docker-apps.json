@@ -1,0 +1,13 @@
+{
+	"admin/services/docker-apps": {
+		"title": "Docker Apps",
+		"order": 59,
+		"action": {
+			"type": "view",
+			"path": "docker-apps"
+		},
+		"depends": {
+			"acl": [ "luci-app-docker-apps" ]
+		}
+	}
+}
