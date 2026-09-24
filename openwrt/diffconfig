@@ -32,10 +32,13 @@ CONFIG_PACKAGE_luci-app-ttyd=y
 CONFIG_PACKAGE_wpad-mbedtls=y
 CONFIG_PACKAGE_iw=y
 CONFIG_PACKAGE_iwinfo=y
-# onboard AP6356S (BCM4356 SDIO)
+# onboard AP6356S (BCM4356A2 SDIO): Khadas firmware + NVRAM, AP set up automatically
 CONFIG_PACKAGE_kmod-brcmfmac=y
-CONFIG_PACKAGE_brcmfmac-nvram-4356-sdio=y
-CONFIG_PACKAGE_cypress-firmware-4356-sdio=y
+CONFIG_PACKAGE_khadas-edge-wifi-firmware=y
+# CONFIG_PACKAGE_cypress-firmware-4356-sdio is not set
+# CONFIG_PACKAGE_brcmfmac-nvram-4356-sdio is not set
+# access point on every Wi-Fi card (/etc/config/wifiauto)
+CONFIG_PACKAGE_khadas-wifi-autoconf=y
 # Intel AX200 / AX210 / BE200
 CONFIG_PACKAGE_kmod-iwlwifi=y
 CONFIG_PACKAGE_iwlwifi-firmware-ax200=y
@@ -109,6 +112,10 @@ CONFIG_PACKAGE_kmod-veth=y
 CONFIG_PACKAGE_kmod-br-netfilter=y
 CONFIG_PACKAGE_kmod-ikconfig=y
 
+## ZeroTier internet gateway (Services -> ZeroTier Gateway)
+CONFIG_PACKAGE_zerotier=y
+CONFIG_PACKAGE_luci-app-zt-gateway=y
+
 ## virtual machines: KVM / QEMU
 CONFIG_PACKAGE_luci-app-kvm=y
 CONFIG_PACKAGE_qemu-aarch64-softmmu=y
@@ -116,6 +123,9 @@ CONFIG_PACKAGE_qemu-img=y
 CONFIG_PACKAGE_kmod-vhost-net=y
 CONFIG_PACKAGE_kmod-tun=y
 CONFIG_PACKAGE_taskset=y
+
+## board
+CONFIG_PACKAGE_kmod-hwmon-pwmfan=y
 
 ## storage
 CONFIG_PACKAGE_block-mount=y

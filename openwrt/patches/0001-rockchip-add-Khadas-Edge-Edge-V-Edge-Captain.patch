@@ -57,20 +57,25 @@ index ea4a2cc..14b9380 100644
  	friendlyarm,nanopi-r5c|\
  	friendlyarm,nanopi-r6c|\
 diff --git a/target/linux/rockchip/image/armv8.mk b/target/linux/rockchip/image/armv8.mk
-index b9f1fca..9dd07ec 100644
+index b9f1fca..998671d 100644
 --- a/target/linux/rockchip/image/armv8.mk
 +++ b/target/linux/rockchip/image/armv8.mk
-@@ -192,6 +192,37 @@ define Device/hinlink_h28k
+@@ -192,6 +192,42 @@ define Device/hinlink_h28k
  endef
  TARGET_DEVICES += hinlink_h28k
  
++# onboard AP6356S needs the Khadas BCM4356A2 firmware (khadas feed),
++# OpenWrt cypress-firmware-4356-sdio is built for BCM4356A3
++KHADAS_EDGE_PACKAGES := kmod-brcmfmac khadas-edge-wifi-firmware \
++	khadas-wifi-autoconf kmod-hwmon-pwmfan
++
 +define Device/khadas_edge
 +  $(Device/rk3399)
 +  DEVICE_VENDOR := Khadas
 +  DEVICE_MODEL := Edge
 +  DEVICE_DTS := rk3399-khadas-edge
 +  UBOOT_DEVICE_NAME := khadas-edge-rk3399
-+  DEVICE_PACKAGES := kmod-brcmfmac brcmfmac-nvram-4356-sdio cypress-firmware-4356-sdio
++  DEVICE_PACKAGES := $(KHADAS_EDGE_PACKAGES)
 +endef
 +TARGET_DEVICES += khadas_edge
 +
@@ -81,7 +86,7 @@ index b9f1fca..9dd07ec 100644
 +  DEVICE_VARIANT := Captain
 +  DEVICE_DTS := rk3399-khadas-edge-captain
 +  UBOOT_DEVICE_NAME := khadas-edge-captain-rk3399
-+  DEVICE_PACKAGES := kmod-brcmfmac brcmfmac-nvram-4356-sdio cypress-firmware-4356-sdio
++  DEVICE_PACKAGES := $(KHADAS_EDGE_PACKAGES)
 +endef
 +TARGET_DEVICES += khadas_edge-captain
 +
@@ -91,7 +96,7 @@ index b9f1fca..9dd07ec 100644
 +  DEVICE_MODEL := Edge-V
 +  DEVICE_DTS := rk3399-khadas-edge-v
 +  UBOOT_DEVICE_NAME := khadas-edge-v-rk3399
-+  DEVICE_PACKAGES := kmod-brcmfmac brcmfmac-nvram-4356-sdio cypress-firmware-4356-sdio
++  DEVICE_PACKAGES := $(KHADAS_EDGE_PACKAGES)
 +endef
 +TARGET_DEVICES += khadas_edge-v
 +

@@ -73,7 +73,7 @@ return view.extend({
 		o.rmempty = false;
 
 		o = s.option(form.ListValue, 'cpus', _('vCPUs'));
-		[ '1', '2', '3', '4', '5', '6' ].forEach(function(n) { o.value(n); });
+		[ '1', '2', '3', '4' ].forEach(function(n) { o.value(n); });
 		o.default = '1';
 
 		o = s.option(form.Value, 'memory', _('Memory (MB)'));
@@ -115,7 +115,7 @@ return view.extend({
 		};
 
 		o = s.option(form.Value, 'cpu_affinity', _('CPU affinity'),
-			_('RK3399: cores 0-3 are Cortex-A53, 4-5 are Cortex-A72. KVM vCPUs must stay on one core type.'));
+			_('RK3399: cores 0-3 are Cortex-A53, 4-5 are Cortex-A72. KVM vCPUs must stay on one core type. Default: 1-2 vCPUs on 4-5, 3-4 vCPUs on 0-3.'));
 		o.modalonly = true;
 		o.value('4-5', _('4-5 (Cortex-A72)'));
 		o.value('0-3', _('0-3 (Cortex-A53)'));

@@ -1,0 +1,336 @@
+#!/usr/bin/env ucode
+'use strict';
+
+// Automatic access point setup for all Wi-Fi radios, config /etc/config/wifiauto
+//
+//   wifi-autoconf           configure radios not configured yet
+//   wifi-autoconf --force   reconfigure all radios
+//   wifi-autoconf --dry-run print the plan only
+//
+// Every radio gets a band / channel / HT mode the driver can really use
+// in AP mode: channels with no-IR / radar / disabled flags are skipped,
+// Intel (iwlwifi) cards can not start an AP on 5/6 GHz (LAR) and use 2.4 GHz.
+
+import { readfile, readlink, basename } from 'fs';
+import { cursor } from 'uci';
+
+let args = ARGV;
+let force = index(args, '--force') >= 0;
+let dry_run = index(args, '--dry-run') >= 0;
+
+// test hooks: --phys FILE (nl80211 wiphy dump as JSON), --board FILE
+function arg_value(name) {
+	let i = index(args, name);
+	return (i >= 0) ? args[i + 1] : null;
+}
+
+function log(msg) {
+	if (dry_run || arg_value('--phys'))
+		warn(`wifi-autoconf: ${msg}\n`);
+	else
+		system(['logger', '-t', 'wifi-autoconf', msg]);
+}
+
+const PREF_2G = [ 6, 1, 11, 2, 3, 4, 5, 7, 8, 9, 10, 12, 13 ];
+const BLOCKS_5G = [ [ 36, 40, 44, 48 ], [ 149, 153, 157, 161 ] ];
+const ALL_5G = [ 36, 40, 44, 48, 149, 153, 157, 161, 165 ];
+
+let uci = cursor();
+let conf = uci.get_all('wifiauto', 'main') ?? {};
+
+if (conf.enabled == '0' && !force)
+	exit(0);
+
+let country = uc(conf.country ?? 'RU');
+if (!match(country, /^[A-Z0-9]{2}$/))
+	country = '00';
+let ssid_base = conf.ssid || 'Khadas-Edge';
+let key = conf.key || 'khadasedge';
+let encryption = conf.encryption || 'psk2';
+let enable_ap = conf.enable_ap != '0';
+let band_pref = conf.band || 'auto';
+let done = conf.done ?? [];
+if (type(done) != 'array')
+	done = [ done ];
+
+function freq_to_channel(freq) {
+	if (freq == 2484)
+		return 14;
+	if (freq < 2484)
+		return (freq - 2407) / 5;
+	if (freq < 5950)
+		return (freq - 5000) / 5;
+	return (freq - 5950) / 5;
+}
+
+function band_of(band) {
+	let f = band?.freqs?.[0]?.freq;
+	if (!f)
+		return null;
+	if (f > 50000)
+		return '60g';
+	if (f > 5900)
+		return '6g';
+	if (f > 4000)
+		return '5g';
+	if (f > 2000)
+		return '2g';
+	return null;
+}
+
+// capabilities of one wiphy for AP mode
+function analyze(phy) {
+	let res = {
+		ap: !!phy.supported_iftypes?.ap,
+		bands: {}
+	};
+
+	for (let band in phy.wiphy_bands) {
+		let name = band_of(band);
+		if (!name)
+			continue;
+
+		let b = res.bands[name] = {
+			usable: {},
+			ht: band.ht_capa > 0,
+			ht40: !!(band.ht_capa & 0x2),
+			vht: band.vht_capa > 0,
+			he_ap: false,
+			eht_ap: false
+		};
+
+		for (let f in band.freqs) {
+			if (f.disabled || f.no_ir || f.radar)
+				continue;
+			b.usable[freq_to_channel(f.freq)] = true;
+		}
+
+		for (let ift in band.iftype_data) {
+			if (!ift?.iftypes?.ap)
+				continue;
+			if (ift.he_cap_phy)
+				b.he_ap = true;
+			if (ift.eht_cap_phy)
+				b.eht_ap = true;
+		}
+	}
+
+	return res;
+}
+
+function plan_2g(b, driver) {
+	let channel = filter(PREF_2G, (c) => b.usable[c])[0];
+	if (!channel)
+		return null;
+
+	let htmode = 'NOHT';
+	if (driver == 'iwlwifi')
+		htmode = 'HT20';
+	else if (b.he_ap)
+		htmode = 'HE20';
+	else if (b.ht)
+		htmode = 'HT20';
+
+	return { band: '2g', channel, htmode };
+}
+
+function plan_5g(b) {
+	for (let block in BLOCKS_5G) {
+		if (length(filter(block, (c) => b.usable[c])) != 4)
+			continue;
+		if (b.he_ap)
+			return { band: '5g', channel: block[0], htmode: 'HE80' };
+		if (b.vht)
+			return { band: '5g', channel: block[0], htmode: 'VHT80' };
+		if (b.ht40)
+			return { band: '5g', channel: block[0], htmode: 'HT40' };
+	}
+
+	let channel = filter(ALL_5G, (c) => b.usable[c])[0];
+	if (!channel)
+		return null;
+
+	let htmode = b.he_ap ? 'HE20' : (b.vht ? 'VHT20' : (b.ht ? 'HT20' : 'NOHT'));
+	return { band: '5g', channel, htmode };
+}
+
+function plan(caps, driver) {
+	if (!caps.ap)
+		return null;
+
+	let b2 = caps.bands['2g'], b5 = caps.bands['5g'];
+	let p2 = b2 ? plan_2g(b2, driver) : null;
+	let p5 = b5 ? plan_5g(b5) : null;
+
+	// Intel: firmware (LAR) does not allow initiating radiation on 5/6 GHz
+	if (driver == 'iwlwifi')
+		p5 = null;
+
+	let pref = band_pref;
+	// onboard AP6356S (brcmfmac): 2.4 GHz is the reliable default
+	if (pref == 'auto' && driver == 'brcmfmac')
+		pref = '2g';
+
+	if (pref == '2g')
+		return p2 ?? p5;
+	if (pref == '5g')
+		return p5 ?? p2;
+	return p5 ?? p2;
+}
+
+// sysfs helpers (overridable from test data)
+function phy_driver(name, phy) {
+	if (phy._driver)
+		return phy._driver;
+	let l = readlink(`/sys/class/ieee80211/${name}/device/driver`);
+	return l ? basename(l) : 'unknown';
+}
+
+function phy_macaddr(name, phy) {
+	if (phy._macaddr)
+		return phy._macaddr;
+	return trim(readfile(`/sys/class/ieee80211/${name}/macaddress`) ?? '');
+}
+
+// --- load phys ---
+
+let phys;
+let phys_file = arg_value('--phys');
+if (phys_file) {
+	phys = json(readfile(phys_file));
+}
+else {
+	if (country != '00')
+		system(`iw reg set ${country} >/dev/null 2>&1; sleep 1`);
+	let nl = require('nl80211');
+	phys = nl.request(nl.const.NL80211_CMD_GET_WIPHY, nl.const.NLM_F_DUMP, { split_wiphy_dump: true });
+}
+
+if (!phys || !length(phys))
+	exit(0);
+
+let board = json(readfile(arg_value('--board') ?? '/etc/board.json') ?? '{}') ?? {};
+
+function phy_by_section(s) {
+	if (s.phy)
+		return s.phy;
+	if (!s.path)
+		return null;
+	for (let name, w in board.wlan) {
+		if (!w?.path)
+			continue;
+		if (w.path == s.path || substr(s.path, -length(w.path)) == w.path)
+			return name;
+	}
+	return null;
+}
+
+let phy_data = {};
+for (let p in phys)
+	if (p?.wiphy_name)
+		phy_data[p.wiphy_name] = p;
+
+// --- configure ---
+
+let used_ssids = {};
+let changed = false;
+let radios = [];
+
+uci.foreach('wireless', 'wifi-device', (s) => {
+	if (s.type != 'mac80211')
+		return;
+	push(radios, s);
+});
+
+// onboard radio first, so it gets the plain SSID
+function is_onboard(s) {
+	let name = phy_by_section(s);
+	return name && phy_data[name] && phy_driver(name, phy_data[name]) == 'brcmfmac';
+}
+radios = sort(radios, (a, b) => (is_onboard(b) ? 1 : 0) - (is_onboard(a) ? 1 : 0));
+
+uci.foreach('wireless', 'wifi-iface', (i) => {
+	if (i.ssid)
+		used_ssids[i.ssid] = i.device;
+});
+
+for (let s in radios) {
+	let name = phy_by_section(s);
+	let phy = name ? phy_data[name] : null;
+	if (!phy)
+		continue;
+
+	let driver = phy_driver(name, phy);
+	let mac = phy_macaddr(name, phy);
+	let id = mac || name;
+
+	if (!force && index(done, id) >= 0)
+		continue;
+
+	let radio = s['.name'];
+	let p = plan(analyze(phy), driver);
+
+	if (!p) {
+		log(`${radio} (${name}, ${driver}): no AP capable band/channel, left unchanged`);
+		push(done, id);
+		changed = true;
+		continue;
+	}
+
+	// SSID: onboard / first radio gets the base name
+	let ssid = ssid_base;
+	if (used_ssids[ssid] && used_ssids[ssid] != radio) {
+		ssid = `${ssid_base}-${uc(p.band)}`;
+		for (let n = 2; used_ssids[ssid] && used_ssids[ssid] != radio; n++)
+			ssid = `${ssid_base}-${uc(p.band)}-${n}`;
+	}
+
+	// brcmfmac firmware handles regulatory itself and can not do SAE
+	let enc = encryption;
+	if (driver == 'brcmfmac' && match(enc, /sae/))
+		enc = 'psk2';
+
+	log(`${radio} (${name}, ${driver}): AP ${p.band} channel ${p.channel} ${p.htmode}, SSID '${ssid}'`);
+
+	if (dry_run) {
+		print(sprintf('%J\n', { radio, phy: name, driver, ssid, encryption: enc, ...p }));
+		continue;
+	}
+
+	uci.set('wireless', radio, 'band', p.band);
+	uci.set('wireless', radio, 'channel', `${p.channel}`);
+	uci.set('wireless', radio, 'htmode', p.htmode);
+	if (driver == 'brcmfmac')
+		uci.delete('wireless', radio, 'country');
+	else
+		uci.set('wireless', radio, 'country', country);
+	uci.delete('wireless', radio, 'disabled');
+
+	let iface = null;
+	uci.foreach('wireless', 'wifi-iface', (i) => {
+		if (!iface && i.device == radio && (i.mode ?? 'ap') == 'ap')
+			iface = i['.name'];
+	});
+	if (!iface) {
+		iface = `default_${radio}`;
+		uci.set('wireless', iface, 'wifi-iface');
+		uci.set('wireless', iface, 'device', radio);
+	}
+
+	uci.set('wireless', iface, 'mode', 'ap');
+	uci.set('wireless', iface, 'network', 'lan');
+	uci.set('wireless', iface, 'ssid', ssid);
+	uci.set('wireless', iface, 'encryption', enc);
+	uci.set('wireless', iface, 'key', key);
+	uci.set('wireless', iface, 'disabled', enable_ap ? '0' : '1');
+
+	used_ssids[ssid] = radio;
+	push(done, id);
+	changed = true;
+}
+
+if (changed && !dry_run) {
+	uci.commit('wireless');
+	uci.set('wifiauto', 'main', 'done', done);
+	uci.commit('wifiauto');
+}

@@ -1,0 +1,14 @@
+{
+	"admin/services/zt-gateway": {
+		"title": "ZeroTier Gateway",
+		"order": 61,
+		"action": {
+			"type": "view",
+			"path": "zt-gateway"
+		},
+		"depends": {
+			"acl": [ "luci-app-zt-gateway" ],
+			"uci": { "ztgateway": true }
+		}
+	}
+}

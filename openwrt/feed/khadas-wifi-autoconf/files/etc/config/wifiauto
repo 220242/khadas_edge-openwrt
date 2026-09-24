@@ -1,0 +1,14 @@
+
+config wifiauto 'main'
+	# configure new Wi-Fi radios automatically (only once per radio)
+	option enabled '1'
+	# enable the access point on configured radios
+	option enable_ap '1'
+	# regulatory country (ISO 3166 alpha-2), needed for 5 GHz
+	option country 'RU'
+	# SSID, extra radios get "-2G" / "-5G" suffix
+	option ssid 'Khadas-Edge'
+	option encryption 'psk2'
+	option key 'khadasedge'
+	# band selection: auto (5 GHz if the card can do AP there), 2g, 5g
+	option band 'auto'

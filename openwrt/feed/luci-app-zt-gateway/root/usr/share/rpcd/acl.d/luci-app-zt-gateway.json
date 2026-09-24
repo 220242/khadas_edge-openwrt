@@ -1,0 +1,20 @@
+{
+	"luci-app-zt-gateway": {
+		"description": "Grant access to the ZeroTier gateway",
+		"read": {
+			"file": {
+				"/usr/libexec/zt-gateway status": [ "exec" ]
+			},
+			"uci": [ "ztgateway" ]
+		},
+		"write": {
+			"file": {
+				"/usr/libexec/zt-gateway authorize *": [ "exec" ],
+				"/usr/libexec/zt-gateway deauthorize *": [ "exec" ],
+				"/usr/libexec/zt-gateway delete *": [ "exec" ],
+				"/usr/libexec/zt-gateway rename *": [ "exec" ]
+			},
+			"uci": [ "ztgateway" ]
+		}
+	}
+}

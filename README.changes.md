@@ -11,6 +11,14 @@
 + virtual machines: QEMU/KVM + LuCI app `luci-app-kvm` (Services → Virtual Machines)
 + containers: Docker (luci-app-dockerman), LXC (luci-app-lxc)
 + GitHub Actions build + release
++ onboard AP6356S: Khadas BCM4356A2 firmware + NVRAM (OpenWrt cypress firmware is for BCM4356A3),
+  no clm_blob, access point enabled out of the box
++ khadas-wifi-autoconf: access point on every Wi-Fi card with a band / channel the driver allows for AP
+  (Intel AX200 / AX210 / BE200: 2.4 GHz)
++ ZeroTier internet gateway (luci-app-zt-gateway): join my.zerotier.com network or own controller
+  (optional build, non-commercial license)
++ KVM: pmu=off and automatic big.LITTLE CPU pinning
++ PWM fan driver
 
 ## OpenWrt Khadas Edge rel 25.12.5
 

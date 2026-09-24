@@ -13,6 +13,6 @@ config vm 'debian'
 	option cdrom '/mnt/vm/debian-13-arm64-netinst.iso'
 	option bridge 'br-lan'
 	option vnc '0'
-	# RK3399: cores 0-3 = Cortex-A53, 4-5 = Cortex-A72
-	# KVM vCPUs must stay on one core type
-	option cpu_affinity '4-5'
+	# RK3399: cores 0-3 = Cortex-A53, 4-5 = Cortex-A72, KVM vCPUs must
+	# stay on one core type (default: 1-2 vCPUs -> 4-5, 3-4 vCPUs -> 0-3)
+	#option cpu_affinity '4-5'

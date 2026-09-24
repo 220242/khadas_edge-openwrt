@@ -1,0 +1,469 @@
+#!/bin/sh
+# ZeroTier internet gateway helper, config: /etc/config/ztgateway
+#
+#   zt-gateway apply                 apply configuration
+#   zt-gateway status                JSON status (+ members in controller mode)
+#   zt-gateway authorize ID          controller mode: authorize member
+#   zt-gateway deauthorize ID
+#   zt-gateway delete ID
+#   zt-gateway rename ID NAME
+
+. /lib/functions.sh
+. /usr/share/libubox/jshn.sh
+
+ZT_HOME="${ZT_HOME:-/var/lib/zerotier-one}"
+ZT_PERSIST="${ZT_PERSIST:-/etc/zerotier}"
+ZT_IF=ztgw0
+EARTH=8056c2e21c000001
+MASQ_NFT=/usr/share/zt-gateway/masq.nft
+LOCK=/var/lock/zt-gateway.lock
+
+log() {
+	echo "$*" >&2
+}
+
+svc() {
+	# $1 service $2 action; ZTGW_NO_SERVICES=1 for tests
+	[ -n "$ZTGW_NO_SERVICES" ] && { log "service $1 $2"; return 0; }
+	[ -x "/etc/init.d/$1" ] && "/etc/init.d/$1" "$2" >/dev/null 2>&1
+}
+
+api_port() {
+	local port
+	port="${ZT_PORT:-$(uci -q get zerotier.global.port)}"
+	echo "${port:-9993}"
+}
+
+# api METHOD PATH [JSON]
+api() {
+	local method="$1" path="$2" data="$3" token
+	token="$(cat "$ZT_HOME/authtoken.secret" 2>/dev/null)"
+	[ -n "$token" ] || return 1
+
+	set -- uclient-fetch -q -T 10 --no-proxy -O - \
+		--header="X-ZT1-Auth: $token" "http://127.0.0.1:$(api_port)$path"
+	case "$method" in
+		GET) "$@" ;;
+		POST) "$@" --post-data="$data" ;;
+		DELETE) "$@" --method=DELETE ;;
+	esac 2>/dev/null
+}
+
+api_wait() {
+	local i=0
+	while [ $i -lt "${1:-60}" ]; do
+		api GET /status >/dev/null && return 0
+		sleep 1
+		i=$((i + 1))
+	done
+	return 1
+}
+
+node_id() {
+	api GET /status | jsonfilter -e '@.address' 2>/dev/null
+}
+
+controller_available() {
+	[ "$(api GET /controller | jsonfilter -e '@.controller' 2>/dev/null)" = "true" ]
+}
+
+valid_nwid() {
+	echo "$1" | grep -qE '^[0-9a-f]{16}$'
+}
+
+valid_member() {
+	echo "$1" | grep -qE '^[0-9a-f]{10}$'
+}
+
+# --- configuration of other packages ---
+
+uci_changed() {
+	[ -n "$(uci -q changes "$1")" ]
+}
+
+zerotier_setup() {
+	local nwid="$1"
+
+	uci -q batch <<-EOF
+		set zerotier.global=zerotier
+		set zerotier.global.enabled='1'
+		set zerotier.global.config_path='$ZT_PERSIST'
+		set zerotier.global.copy_config_path='0'
+	EOF
+
+	# never join the public "earth" network
+	remove_earth() {
+		[ "$(uci -q get "zerotier.$1.id")" = "$EARTH" ] && uci -q delete "zerotier.$1"
+	}
+	config_load zerotier
+	config_foreach remove_earth network
+
+	if [ -n "$nwid" ]; then
+		uci -q batch <<-EOF
+			set zerotier.ztgw=network
+			set zerotier.ztgw.id='$nwid'
+			set zerotier.ztgw.allow_managed='1'
+			set zerotier.ztgw.allow_global='0'
+			set zerotier.ztgw.allow_default='0'
+			set zerotier.ztgw.allow_dns='0'
+		EOF
+	else
+		uci -q delete zerotier.ztgw
+	fi
+
+	mkdir -p "$ZT_PERSIST"
+	local devmap=""
+	[ -n "$nwid" ] && devmap="$nwid=$ZT_IF"
+	local old="$(cat "$ZT_PERSIST/devicemap" 2>/dev/null)"
+	[ "$old" = "$devmap" ] || {
+		echo "$devmap" > "$ZT_PERSIST/devicemap"
+		ZT_RESTART=1
+	}
+
+	if uci_changed zerotier; then
+		uci commit zerotier
+		ZT_RESTART=1
+	fi
+}
+
+network_setup() {
+	local enabled="$1" exit_node="$2" lan_access="$3" admin_access="$4" dns="$5"
+
+	uci -q delete network.zerotier
+	uci -q delete firewall.ztgw_zone
+	uci -q delete firewall.ztgw_wan
+	uci -q delete firewall.ztgw_lan
+	uci -q delete firewall.ztgw_lan_in
+	uci -q delete firewall.ztgw_masq
+	uci -q delete firewall.ztgw_dns
+	uci -q delete firewall.ztgw_ping
+
+	if [ "$enabled" = 1 ]; then
+		local input=REJECT
+		[ "$admin_access" = 1 ] && input=ACCEPT
+
+		uci -q batch <<-EOF
+			set network.zerotier=interface
+			set network.zerotier.proto='none'
+			set network.zerotier.device='$ZT_IF'
+
+			set firewall.ztgw_zone=zone
+			set firewall.ztgw_zone.name='zerotier'
+			add_list firewall.ztgw_zone.network='zerotier'
+			set firewall.ztgw_zone.input='$input'
+			set firewall.ztgw_zone.output='ACCEPT'
+			set firewall.ztgw_zone.forward='REJECT'
+			set firewall.ztgw_zone.mtu_fix='1'
+
+			set firewall.ztgw_ping=rule
+			set firewall.ztgw_ping.name='ZeroTier-ICMP'
+			set firewall.ztgw_ping.src='zerotier'
+			set firewall.ztgw_ping.proto='icmp'
+			set firewall.ztgw_ping.target='ACCEPT'
+		EOF
+
+		[ "$dns" = 1 ] && uci -q batch <<-EOF
+			set firewall.ztgw_dns=rule
+			set firewall.ztgw_dns.name='ZeroTier-DNS'
+			set firewall.ztgw_dns.src='zerotier'
+			set firewall.ztgw_dns.dest_port='53'
+			set firewall.ztgw_dns.target='ACCEPT'
+		EOF
+
+		[ "$exit_node" = 1 ] && uci -q batch <<-EOF
+			set firewall.ztgw_wan=forwarding
+			set firewall.ztgw_wan.src='zerotier'
+			set firewall.ztgw_wan.dest='wan'
+
+			set firewall.ztgw_masq=include
+			set firewall.ztgw_masq.type='nftables'
+			set firewall.ztgw_masq.path='$MASQ_NFT'
+			set firewall.ztgw_masq.position='chain-post'
+			set firewall.ztgw_masq.chain='srcnat'
+		EOF
+
+		[ "$lan_access" = 1 ] && uci -q batch <<-EOF
+			set firewall.ztgw_lan=forwarding
+			set firewall.ztgw_lan.src='zerotier'
+			set firewall.ztgw_lan.dest='lan'
+
+			set firewall.ztgw_lan_in=forwarding
+			set firewall.ztgw_lan_in.src='lan'
+			set firewall.ztgw_lan_in.dest='zerotier'
+		EOF
+	fi
+
+	if uci_changed network; then
+		uci commit network
+		svc network reload
+	fi
+	if uci_changed firewall; then
+		uci commit firewall
+		svc firewall reload
+	fi
+}
+
+# address pool from subnet: sets ZT_ADDR ZT_PREFIX ZT_POOL_START ZT_POOL_END ZT_NET
+subnet_calc() {
+	local subnet="$1"
+	eval "$(/bin/ipcalc.sh "$subnet" 1 1)" || return 1
+	ZT_ADDR="$START"
+	ZT_PREFIX="$PREFIX"
+	ZT_NET="$NETWORK/$PREFIX"
+	eval "$(/bin/ipcalc.sh "$subnet" 2 250)" || return 1
+	ZT_POOL_START="$START"
+	ZT_POOL_END="$END"
+	[ -n "$ZT_ADDR" ] && [ -n "$ZT_POOL_START" ] && [ "$ZT_PREFIX" -le 30 ]
+}
+
+controller_setup() {
+	local nwid="$1" name="$2" subnet="$3" private="$4" exit_node="$5" dns="$6"
+	local node
+
+	api_wait 90 || { log "zerotier-one API is not reachable"; return 1; }
+	controller_available || {
+		log "zerotier-one is built without the network controller"
+		return 1
+	}
+	node="$(node_id)"
+	[ -n "$node" ] || return 1
+
+	subnet_calc "$subnet" || { log "invalid subnet $subnet"; return 1; }
+
+	if ! valid_nwid "$nwid" || ! api GET "/controller/network/$nwid" >/dev/null; then
+		nwid="$(api POST "/controller/network/${node}______" '{}' | jsonfilter -e '@.id')"
+		valid_nwid "$nwid" || { log "can not create network"; return 1; }
+		uci set ztgateway.main.network_id="$nwid"
+		uci commit ztgateway
+		log "created network $nwid"
+	fi
+
+	json_init
+	json_add_string name "$name"
+	json_add_boolean private "$private"
+	json_add_boolean enableBroadcast 1
+	json_add_object v4AssignMode
+	json_add_boolean zt 1
+	json_close_object
+	json_add_array ipAssignmentPools
+	json_add_object
+	json_add_string ipRangeStart "$ZT_POOL_START"
+	json_add_string ipRangeEnd "$ZT_POOL_END"
+	json_close_object
+	json_close_array
+	json_add_array routes
+	json_add_object
+	json_add_string target "$ZT_NET"
+	json_close_object
+	if [ "$exit_node" = 1 ]; then
+		json_add_object
+		json_add_string target "0.0.0.0/0"
+		json_add_string via "$ZT_ADDR"
+		json_close_object
+	fi
+	json_close_array
+	json_add_object dns
+	if [ "$dns" = 1 ]; then
+		json_add_string domain "zt"
+		json_add_array servers
+		json_add_string "" "$ZT_ADDR"
+		json_close_array
+	else
+		json_add_string domain ""
+		json_add_array servers
+		json_close_array
+	fi
+	json_close_object
+	api POST "/controller/network/$nwid" "$(json_dump)" >/dev/null || return 1
+
+	# this device: authorized, fixed gateway address
+	json_init
+	json_add_boolean authorized 1
+	json_add_boolean noAutoAssignIps 1
+	json_add_string name "gateway"
+	json_add_array ipAssignments
+	json_add_string "" "$ZT_ADDR"
+	json_close_array
+	api POST "/controller/network/$nwid/member/$node" "$(json_dump)" >/dev/null || return 1
+
+	echo "$nwid"
+}
+
+teardown() {
+	network_setup 0
+	uci -q delete zerotier.ztgw
+	# disable zerotier if nothing else is configured
+	local other=0
+	count_networks() { other=$((other + 1)); }
+	config_load zerotier
+	config_foreach count_networks network
+	[ "$other" = 0 ] && uci -q set zerotier.global.enabled='0'
+	if uci_changed zerotier; then
+		uci commit zerotier
+		svc zerotier restart
+	fi
+}
+
+apply() {
+	local enabled mode nwid exit_node lan_access admin_access name subnet private dns
+
+	config_load ztgateway
+	config_get_bool enabled main enabled 0
+	config_get mode main mode join
+	config_get nwid main network_id
+	config_get_bool exit_node main exit_node 1
+	config_get_bool lan_access main lan_access 0
+	config_get_bool admin_access main admin_access 1
+	config_get name main name khadas-edge
+	config_get subnet main subnet 10.147.20.0/24
+	config_get_bool private main private 1
+	config_get_bool dns main dns 1
+
+	if [ "$enabled" != 1 ]; then
+		teardown
+		return 0
+	fi
+
+	nwid="$(echo "$nwid" | tr 'A-F' 'a-f')"
+	ZT_RESTART=
+
+	case "$mode" in
+	controller)
+		[ "$exit_node" = 1 ] || dns=0
+		# start zerotier-one (identity, API) without a network first
+		valid_nwid "$nwid" || nwid=
+		zerotier_setup "$nwid"
+		[ -n "$ZT_RESTART" ] && svc zerotier restart
+		ZT_RESTART=
+		nwid="$(controller_setup "$nwid" "$name" "$subnet" "$private" "$exit_node" "$dns")" || {
+			log "controller setup failed"
+			return 1
+		}
+		zerotier_setup "$nwid"
+		;;
+	*)
+		valid_nwid "$nwid" || {
+			log "join mode: invalid network ID '$nwid'"
+			network_setup 0
+			return 1
+		}
+		zerotier_setup "$nwid"
+		dns=0
+		;;
+	esac
+
+	network_setup 1 "$exit_node" "$lan_access" "$admin_access" "$dns"
+	[ -n "$ZT_RESTART" ] && svc zerotier restart
+	log "gateway active: mode $mode, network $nwid, interface $ZT_IF"
+	return 0
+}
+
+# --- status for LuCI ---
+
+status() {
+	local nwid mode node online=0 ctl=0 running=0
+
+	# empty API answers (network not joined yet) are not errors here
+	exec 2>/dev/null
+
+	config_load ztgateway
+	config_get nwid main network_id
+	config_get mode main mode join
+
+	json_init
+	if api GET /status > /tmp/ztgw.status.$$ 2>/dev/null; then
+		running=1
+		node="$(jsonfilter -i /tmp/ztgw.status.$$ -e '@.address')"
+		[ "$(jsonfilter -i /tmp/ztgw.status.$$ -e '@.online')" = "true" ] && online=1
+		controller_available && ctl=1
+	fi
+	rm -f /tmp/ztgw.status.$$
+
+	json_add_boolean running "$running"
+	json_add_boolean online "$online"
+	json_add_boolean controller "$ctl"
+	json_add_string node_id "$node"
+	json_add_string network_id "$nwid"
+	json_add_string mode "$mode"
+	json_add_string interface "$ZT_IF"
+
+	if [ "$running" = 1 ] && valid_nwid "$nwid"; then
+		local net
+		net="$(api GET "/network/$nwid")"
+		json_add_string network_status "$(echo "$net" | jsonfilter -e '@.status')"
+		json_add_string network_name "$(echo "$net" | jsonfilter -e '@.name')"
+		json_add_array addresses
+		for a in $(echo "$net" | jsonfilter -e '@.assignedAddresses[*]'); do
+			json_add_string "" "$a"
+		done
+		json_close_array
+	fi
+
+	if [ "$ctl" = 1 ] && [ "$mode" = controller ] && valid_nwid "$nwid"; then
+		local peers ids id m
+		peers="$(api GET /peer)"
+		# member list: {"<id>": revision, ...}
+		ids="$(api GET "/controller/network/$nwid/member" | grep -o '"[0-9a-f]\{10\}"' | tr -d '"')"
+		json_add_array members
+		for id in $ids; do
+			m="$(api GET "/controller/network/$nwid/member/$id")" || continue
+			json_add_object
+			json_add_string id "$id"
+			json_add_string name "$(echo "$m" | jsonfilter -e '@.name')"
+			json_add_boolean authorized "$([ "$(echo "$m" | jsonfilter -e '@.authorized')" = true ] && echo 1 || echo 0)"
+			json_add_array addresses
+			for a in $(echo "$m" | jsonfilter -e '@.ipAssignments[*]'); do
+				json_add_string "" "$a"
+			done
+			json_close_array
+			json_add_boolean self "$([ "$id" = "$node" ] && echo 1 || echo 0)"
+			json_add_boolean online "$(echo "$peers" | jsonfilter -e "@[@.address='$id'].latency" 2>/dev/null | grep -q '^[0-9]' && echo 1 || echo 0)"
+			json_close_object
+		done
+		json_close_array
+	fi
+
+	json_dump
+}
+
+member_update() {
+	local id="$1" data="$2" nwid
+	valid_member "$id" || { echo '{"error":"invalid member id"}'; return 1; }
+	nwid="$(uci -q get ztgateway.main.network_id)"
+	valid_nwid "$nwid" || { echo '{"error":"no network"}'; return 1; }
+	if [ "$data" = DELETE ]; then
+		api DELETE "/controller/network/$nwid/member/$id" >/dev/null
+	else
+		api POST "/controller/network/$nwid/member/$id" "$data" >/dev/null
+	fi && echo '{"result":"ok"}' || { echo '{"error":"request failed"}'; return 1; }
+}
+
+case "$1" in
+	apply)
+		mkdir -p "${LOCK%/*}"
+		exec 9>"$LOCK"
+		flock 9
+		apply
+		;;
+	status)
+		status
+		;;
+	authorize)
+		member_update "$2" '{"authorized":true}'
+		;;
+	deauthorize)
+		member_update "$2" '{"authorized":false}'
+		;;
+	delete)
+		member_update "$2" DELETE
+		;;
+	rename)
+		json_init
+		json_add_string name "$3"
+		member_update "$2" "$(json_dump)"
+		;;
+	*)
+		echo "usage: $0 apply|status|authorize ID|deauthorize ID|delete ID|rename ID NAME" >&2
+		exit 1
+		;;
+esac

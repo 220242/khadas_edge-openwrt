@@ -6,6 +6,11 @@ on:
     tags: [ 'v*' ]
   pull_request:
   workflow_dispatch:
+    inputs:
+      zerotier_controller:
+        description: 'Add ZeroTier network controller (non-commercial license, private use only, not released)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -16,6 +21,8 @@ jobs:
     timeout-minutes: 360
     env:
       OW_REL: v25.12.5
+      SRC: /mnt/build/openwrt
+      ZT_CONTROLLER: ${{ inputs.zerotier_controller && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -24,7 +31,9 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
             /opt/hostedtoolcache/CodeQL /usr/local/share/boost
           sudo docker image prune --all --force || true
-          df -h /
+          sudo mkdir -p /mnt/build
+          sudo chown "$USER:$USER" /mnt/build
+          df -h / /mnt
 
       - name: install build dependencies
         run: |
@@ -37,8 +46,8 @@ jobs:
       - name: cache sources
         uses: actions/cache@v4
         with:
-          path: build/openwrt/dl
-          key: dl-${{ env.OW_REL }}-${{ hashFiles('openwrt/diffconfig') }}
+          path: /mnt/build/openwrt/dl
+          key: dl-${{ env.OW_REL }}-${{ hashFiles('openwrt/diffconfig', 'openwrt/feed/**/Makefile') }}
           restore-keys: dl-${{ env.OW_REL }}-
 
       - name: prepare
@@ -52,11 +61,11 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: openwrt-${{ env.OW_REL }}-khadas-edge
+          name: openwrt-${{ env.OW_REL }}-khadas-edge${{ env.ZT_CONTROLLER == '1' && '-zt-controller' || '' }}
           path: out/
 
       - name: release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && env.ZT_CONTROLLER != '1'
         uses: softprops/action-gh-release@v2
         with:
           files: out/*

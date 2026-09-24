@@ -1,0 +1,14 @@
+#!/bin/sh /etc/rc.common
+# ZeroTier internet gateway, config: /etc/config/ztgateway
+
+START=95
+USE_PROCD=1
+
+start_service() {
+	# background: controller mode waits for zerotier-one API
+	( /usr/libexec/zt-gateway apply 2>&1 | logger -t zt-gateway ) &
+}
+
+service_triggers() {
+	procd_add_reload_trigger ztgateway
+}

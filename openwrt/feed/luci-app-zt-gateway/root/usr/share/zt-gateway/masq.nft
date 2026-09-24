@@ -1,0 +1,1 @@
+iifname "ztgw0" oifname != "ztgw0" masquerade comment "!zt-gateway: exit node"

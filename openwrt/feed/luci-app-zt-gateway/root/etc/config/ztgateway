@@ -1,0 +1,20 @@
+
+config gateway 'main'
+	option enabled '0'
+	# join: network created on my.zerotier.com (or another controller)
+	# controller: own ZeroTier network controller on this device
+	#             (only if zerotier was built with the controller)
+	option mode 'join'
+	# join: network ID to join; controller: created automatically
+	option network_id ''
+	# ZeroTier clients may use this device as internet gateway
+	option exit_node '1'
+	# ZeroTier clients may access the LAN (needed when the uplink is the LAN port)
+	option lan_access '0'
+	# LuCI / SSH / DNS of this device are reachable from ZeroTier
+	option admin_access '1'
+	# controller mode settings
+	option name 'khadas-edge'
+	option subnet '10.147.20.0/24'
+	option private '1'
+	option dns '1'

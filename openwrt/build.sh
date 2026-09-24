@@ -12,6 +12,9 @@
 ##   SRC=build/openwrt OpenWrt source tree
 ##   JOBS=$(nproc)
 ##   OUT=out           images output directory
+##   ZT_CONTROLLER=1   add the ZeroTier network controller (ZeroTier
+##                     Source-Available License: non-commercial use only,
+##                     do not distribute such images)
 
 set -euo pipefail
 
@@ -83,6 +86,10 @@ cp -a "$TOP/files" "$SRC/files"
 
 ## config
 cp "$TOP/diffconfig" .config
+if [ "${ZT_CONTROLLER:-0}" = 1 ]; then
+	log "ZeroTier network controller enabled: non-commercial license, private use only"
+	echo "CONFIG_ZEROTIER_ENABLE_CONTROLLER=y" >> .config
+fi
 make defconfig
 
 # check that all requested packages survived defconfig
@@ -96,6 +103,9 @@ while read -r line; do
 	esac
 done < "$TOP/diffconfig"
 [ -z "$missing" ] || die "not selected after defconfig:$missing"
+if [ "${ZT_CONTROLLER:-0}" = 1 ]; then
+	grep -q '^CONFIG_ZEROTIER_ENABLE_CONTROLLER=y' .config || die "ZeroTier controller not selected"
+fi
 
 [ "$STEP" = "prepare" ] && exit 0
 
