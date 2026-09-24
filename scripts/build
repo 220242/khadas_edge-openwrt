@@ -2,11 +2,11 @@
 
 ## hyphop ##
 
-#= build demo openwrt khadas vims image
+#= build openwrt image for Khadas Edge (RockChip RK3399)
 
 ## HOW TO
 
-## ./build -1|-2|-3|-3l
+## ./build [-e] [-r|-rr] [-rel=25.12.5] [emmc] [+servers]
 
 PR=$(dirname $0)
 PA=$(realpath $PR)
@@ -35,6 +35,10 @@ for p in $@; do
 
 	echo "[i] force refresh">&2
 
+	[ -d "$PR/../bin/$HOST_ARCH.$REL" ] && {
+	    CMD rm -rf "$PR/../bin/$HOST_ARCH.$REL"
+	}
+
 	[ -d $OPKG_LIST ] && {
 	    CMD rm -rf $OPKG_LIST
 	}
@@ -44,9 +48,8 @@ for p in $@; do
 	}
 
 	[ "$p" = "-rr" ] && {
-	    echo "[i] clean opkg cache">&2
-	    CMD rm -rf "$PR/../bin/opkg-cache"
-	    CMD mkdir -p "$PR/../bin/opkg-cache"
+	    echo "[i] clean package cache">&2
+	    CMD rm -rf "$PR/../bin/opkg-cache" "$PR/../bin/apk-cache"
 	}
 
 	;;
@@ -60,20 +63,11 @@ for p in $@; do
 	## REL
 	export REL=${p#*=}
 	echo "[i] force REL: $REL">&2
+	# re-read config for new REL (VER PKG_MGR ...)
+	unset VER PKG_MGR
+	. $0.conf
 	;;
-	-vim2|-2|-VIM2)
-	BOARD=VIM2
-	;;
-	-vim3|-3|-VIM2)
-	BOARD=VIM3
-	;;
-	-vim3l|-3l|-VIM3L)
-	BOARD=VIM3L
-	;;
-	-vim1|-1|-VIM1|-VIM|-vim)
-	BOARD=VIM1
-	;;
-	-Edge|-e|-EDGE)
+	-Edge|-e|-EDGE|-edge)
 	BOARD=Edge
 	;;
 
@@ -90,7 +84,9 @@ for p in $@; do
 
 done
 
-echo "[i] config board: $BOARD rel : $REL // apps:$APPS">&2
+echo "[i] config board: $BOARD rel : $REL pkg: $PKG_MGR fw: $FIREWALL // apps:$APPS">&2
+
+export REL
 
 IMG_EXT4_NO=1
 
@@ -121,7 +117,7 @@ IMG_="$OUT_/$IMG_NAME2"
 IMG_LAST="$OUT_/Khadas.$Label.$apps.last"
 
 ## check
-REQUIRED="rsync curl wget sync sfdisk gzip mkimage mksquashfs mkfs.ext4 mkfs.vfat mdir mcopy"
+REQUIRED="rsync curl wget bash tar sync sfdisk gzip mkimage mksquashfs mkfs.ext4 mkfs.vfat mdir mcopy"
 
 echo "[i] check required: $REQUIRED">&2
 
@@ -230,39 +226,40 @@ UNPACK(){
     esac
 }
 
-## PREPRARE HOST OPKG
+## PREPARE HOST PACKAGE MANAGER (apk or opkg from OpenWrt x86_64 rootfs)
 
 case $REL in
-21*)
-X86_rootfs=openwrt-$REL-x86-64-rootfs.tar.gz
-;;
-*)
-X86_rootfs=openwrt-$REL-x86-64-generic-rootfs.tar.gz
+    1*|2[0-2].*)
+    FAIL "OpenWrt $REL not supported, use 23.05 or newer"
+    ;;
 esac
 
-DL https://downloads.openwrt.org/releases/$REL/targets/x86/64/$X86_rootfs || FAIL
+X86_rootfs=openwrt-$REL-x86-64-rootfs.tar.gz
+
+DL $OW_DL/$REL/targets/x86/64/$X86_rootfs || FAIL
 
 #HOST_ARCH="$(uname -m)"
 
-TO="$PR/../bin/$HOST_ARCH"
-[ -d "$TO" ] || \
+TO="$PR/../bin/$HOST_ARCH.$REL"
+[ -d "$TO" ] && \
+CMD rm -rf "$TO"
 CMD mkdir -p $TO
 
-case $REL in
-21*)
-CMD tar -xf $R -C "$TO" ./bin/opkg  ./lib/libc.so  ./lib/libgcc_s.so.1  ./lib/libubox.so.20210516
-;;
-*)
-CMD tar -xf $R -C "$TO" ./bin/opkg  ./lib/libc.so  ./lib/libgcc_s.so.1  ./lib/libubox.so
+# full x86 rootfs is small, just unpack all - sonames change between releases
+CMD tar -xf $R -C "$TO" \
+    --exclude='./dev/*' 2>/dev/null
+
+case $PKG_MGR in
+    apk)  HOST_PKG_BIN="$TO/usr/bin/apk" ;;
+    *)    HOST_PKG_BIN="$TO/bin/opkg" ;;
 esac
 
+[ -x "$HOST_PKG_BIN" ] || FAIL "$PKG_MGR not found in $X86_rootfs"
+[ -e "$TO/lib/libc.so" ] || FAIL "musl libc.so not found in $X86_rootfs"
 
 ###
 
-# cd ../bin
-# DL http://downloads.openwrt.org/releases/18.06.4/packages/x86_64/base/opkg_2019-06-14-dcbc142e-1_x86_64.ipk || FAIL
-
-DL https://downloads.openwrt.org/releases/$REL/targets/$TARGET/64/openwrt-$REL-$TARGET-64-default-rootfs.tar.gz || FAIL
+DL $OW_DL/$REL/targets/$TARGET/$SUBTARGET/openwrt-$REL-$TARGET-$SUBTARGET-rootfs.tar.gz || FAIL
 
 #UNPACK $R
 #OWBASE=$T
@@ -320,21 +317,10 @@ CMD rm -rf $OWTMP/lib/modules/*
 CMD tar -xf $MODULES_TAR -C $OWTMP || FAIL
 CMD tar -xf $FW_BIN -C $OWTMP || FAIL
 
-TMPMOD=/tmp/
-
-#for RRR in $REP_MOD; do
-#    echo "[i] block original modules $RRR">&2
-#    CMD ln -s $TMPMOD $OWTMP/lib/modules/$RRR
-#done
-
-for RRR in $OWTMP/lib/modules/4*; do
-    [ -d "$RRR" ] && {
-    echo "[i] block original modules $RRR">&2
-    CMD ln -s $TMPMOD $RRR
-    }
-done
-
-[ -d $TMPMOD ] || mkdir $TMPMOD
+# khadas kernel modules dirs (+ compat links)
+KMOD_VER=$(ls -1 $OWTMP/lib/modules | tr '\n' ' ')
+[ "$KMOD_VER" ] || FAIL "kernel modules not found"
+echo "[i] kernel modules: $KMOD_VER">&2
 
 #exit 0
 
@@ -386,6 +372,24 @@ DL https://github.com/hyphop/pkg/releases/download/bins/openwrt_extra_bins.tar.g
 
 CMD tar -xf $R -C $OWTMP || FAIL
 
+## run pending package post-install scripts (apk)
+$PR/pkg postinst || FAIL "post-install scripts"
+
+## openwrt kmod-* packages are built for the openwrt kernel, not usable
+## with khadas kernel - drop them, keep only khadas kernel modules
+TMPMOD=/tmp/
+for RRR in $OWTMP/lib/modules/*; do
+    case " $KMOD_VER " in
+	*" $(basename $RRR) "*) continue ;;
+    esac
+    [ -L "$RRR" ] && continue
+    [ -d "$RRR" ] && {
+    echo "[i] block original modules $RRR">&2
+    CMD rm -rf $RRR
+    CMD ln -s $TMPMOD $RRR
+    }
+done
+
 $PR/post_install.services || FAIL
 
 for a in $APPS; do
@@ -396,25 +400,21 @@ for a in $APPS; do
 done
 
 
+## PREINIT
+# khadas preinit hooks: rootfs overlay check + board hw init
+CMD cp -a $PR/../files/preinit/. $OWTMP
+
 ## FAILSAFE
 [ "$NO_FAILSAFE" ] && {
     echo "[i] disable failsafe | preinit ">&2
-#    sed -i s/pi_preinit_no_failsafe=\"\"/pi_preinit_no_failsafe=\"1\"/ $OWTMP/lib/preinit/00_preinit.conf
-#    chmod 0644 $OWTMP/etc/preinit
-
-[ "" ] && {
-    mv $OWTMP/etc/preinit $OWTMP/etc/preinit.disabled
-
-echo "#!/bin/sh
-## hyphop ##
-#= preinit disabled
-" > $OWTMP/etc/preinit
-
-    mv $OWTMP/lib/preinit $OWTMP/lib/preinit.disabled
-}
-
-    CMD cp -a $PR/../files/preinit/* $OWTMP
-
+    PI_CONF=$OWTMP/lib/preinit/00_preinit.conf
+    [ -f $PI_CONF ] || FAIL "$PI_CONF not found"
+    CMD sed -i \
+	-e 's/^pi_preinit_no_failsafe=.*/pi_preinit_no_failsafe="y"/' \
+	-e 's/^fs_failsafe_wait_timeout=.*/fs_failsafe_wait_timeout=1/' \
+	$PI_CONF
+    grep -q '^pi_preinit_no_failsafe=' $PI_CONF || \
+	echo 'pi_preinit_no_failsafe="y"' >> $PI_CONF
 }
 
 # clean wrong kernel modules
@@ -453,31 +453,6 @@ CMD sync
 CMD cp $PR/../files/user_squash.env $OWTMP/boot/user.env
 CMD cp $PR/../files/.auto* $OWTMP
 
-case $BOARD in
-    VIM3*)
-
-#    [ "$ITYPE" = "emmc" ] && {
-#	echo "[i] BOOT FROM SD">&2
-#        CMD sed -i s/mmcblk0/mmcblk2/ $OWTMP/boot/user.env
-#    }
-#
-#    [ "$ITYPE" = "sd" ] && {
-#	echo "[i] BOOT FROM SD">&2
-#        CMD sed -i s/mmcblk0/mmcblk1/ $OWTMP/boot/user.env
-#    }
-
-    ;;
-
-    *)
-
-#    [ "$ITYPE" = "emmc" ] && {
-#	echo "[i] BOOT FROM EMMC">&2
-#    
-#        CMD sed -i s/mmcblk0/mmcblk1/ $OWTMP/boot/user.env
-#    }
-
-    ;;
-esac
 
 CMD cp $PR/../files/docs/* $OWTMP
 CMD cp -a $PR/../files/scripts $OWTMP
@@ -725,34 +700,7 @@ ls -l1
 gzip -1 -c $IMG_VFAT > $IMG_VFAT.gz
 
 
-[ "$MAKE_ALL" ] && {
-
-echo "[i] make all $BOARDS">&2
-for B in $BOARDS; do
-
-IMG2_="$B.$IMG_CNAME.img"
-IMG2="$OUT_/$B.$IMG_CNAME.img"
-IMG3="$OUT_/$B.$IMG_CNAML_.last.img"
-
-ln -sf $IMG2_.gz $IMG3.gz
-
-[ "$B" = "$BOARD" ] && continue
-
-DL https://github.com/hyphop/khadas-uboot/releases/download/$UBOOT_REL/$B.u-boot.sd.bin || FAIL
-
-CMD cp $IMG_VFAT $IMG2
-CMD dd if=/dev/zero of=$IMG2 conv=fsync,notrunc bs=1M count=1 seek=1	2>/dev/null	|| FAIL  mkboot1
-CMD dd if=$R of=$IMG2 conv=fsync,notrunc bs=444 count=1			2>/dev/null	|| FAIL  mkboot2
-CMD dd if=$R of=$IMG2 conv=fsync,notrunc bs=512 skip=1 seek=1		2>/dev/null	|| FAIL  mkboot3
-
-#md5sum $IMG2 > $IMG2.md5sum
-gzip -1 -c $IMG2 > $IMG2.gz
-#ln -sf $IMG2_.gz $IMG3.gz
-
-done
-
-
-}
+ln -sf $BOARD.$IMG_CNAME.img.gz $OUT_/$BOARD.$IMG_CNAML_.last.img.gz
 
 #NO_RAW_IMG=1
 (

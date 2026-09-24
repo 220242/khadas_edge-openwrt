@@ -1,0 +1,11 @@
+#!/bin/sh
+
+## hyphop ##
+
+#= check and prepare rootfs overlay before mount_root (80_mount_root)
+
+do_check_root() {
+	[ -x /opt/check_root ] && /opt/check_root
+}
+
+[ "$INITRAMFS" = "1" ] || boot_hook_add preinit_main do_check_root

@@ -2,9 +2,9 @@
 
 # hyphop #
 
-#= opkg.conf template
+#= opkg.conf template (OpenWrt 23.05 / 24.10 only, 25.x+ uses apk)
 
-[ "$REL" ] || {
+[ "$OW_DL" ] || {
     PR=$(dirname $0)
     echo "[i] autoconf from $PR/build.conf">&2
     . $PR/build.conf
@@ -16,17 +16,15 @@
 
 cat <<end
 
-src/gz extra https://github.com/hyphop/khadas-openwrt-feed-extra/releases/download/$PKGS_EXTRA_VER
-src/gz openwrt_core http://downloads.openwrt.org/releases/$REL/targets/$TARGET/$BITS/packages
-src/gz openwrt_base http://downloads.openwrt.org/releases/$REL/packages/$OWARCH/base
-src/gz openwrt_luci http://downloads.openwrt.org/releases/$REL/packages/$OWARCH/luci
-src/gz openwrt_packages http://downloads.openwrt.org/releases/$REL/packages/$OWARCH/packages
-src/gz openwrt_routing http://downloads.openwrt.org/releases/$REL/packages/$OWARCH/routing
-src/gz openwrt_telephony http://downloads.openwrt.org/releases/$REL/packages/$OWARCH/telephony
+src/gz openwrt_core $OW_DL/$REL/targets/$TARGET/$SUBTARGET/packages
+src/gz openwrt_base $OW_DL/$REL/packages/$OWARCH/base
+src/gz openwrt_luci $OW_DL/$REL/packages/$OWARCH/luci
+src/gz openwrt_packages $OW_DL/$REL/packages/$OWARCH/packages
+src/gz openwrt_routing $OW_DL/$REL/packages/$OWARCH/routing
+src/gz openwrt_telephony $OW_DL/$REL/packages/$OWARCH/telephony
 
 arch all 100
 arch $OWARCH 200
-arch aarch64_cortex-a53 300
 
 dest root $OWTMP
 dest ram /tmp

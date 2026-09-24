@@ -1,0 +1,28 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  edge:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y util-linux u-boot-tools mtools \
+            squashfs-tools e2fsprogs dosfstools rsync curl wget
+
+      - name: build OpenWrt for Khadas Edge
+        run: ./scripts/build -e
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Edge.OpenWrt
+          path: |
+            /tmp/Edge.OpenWrt.*.img.gz
+            /tmp/Khadas.OpenWrt.*.md5sums

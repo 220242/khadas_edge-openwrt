@@ -1,0 +1,148 @@
+#!/bin/sh
+
+## hyphop ##
+
+#= package manager wrapper (apk for OpenWrt 25.x+, opkg for older)
+
+## USAGE
+##   pkg update
+##   pkg install PKG...
+##   pkg remove PKG...
+##   pkg list-installed
+##   pkg postinst            # apk only: run pending post-install scripts
+##   pkg raw ARGS...         # pass args to apk/opkg as is
+
+PR=$(dirname $0)
+
+. $PR/build.conf
+
+HOST_ROOT="$PR/../bin/$HOST_ARCH.$REL"
+
+[ -d "$HOST_ROOT" ] || {
+    echo "[i] $PKG_MGR not prepared $HOST_ROOT $0">&2
+    echo "[i] use ./build at first !!!">&2
+    exit 1
+}
+
+HOST_ROOT=$(realpath $HOST_ROOT)
+
+[ -d "$OWTMP" ] || {
+    echo "[e] target rootfs $OWTMP not found">&2
+    exit 1
+}
+
+CACHE=$(realpath -m $PR/../bin/$PKG_MGR-cache)
+[ -d $CACHE ] || mkdir -p $CACHE
+
+# run host x86_64 musl binary from the OpenWrt x86 rootfs
+# NOTE: --library-path instead of LD_LIBRARY_PATH, so host tools
+# started by apk (wget) do not pick up musl libraries
+HOST_RUN(){
+    "$HOST_ROOT/lib/libc.so" \
+	--library-path "$HOST_ROOT/lib:$HOST_ROOT/usr/lib" \
+	"$@"
+}
+
+CMD(){
+    echo "[#] $@">&2
+    "$@"
+}
+
+## APK ##
+
+APK(){
+    # repositories and signing keys are taken from the target rootfs
+    # $OWTMP/etc/apk/repositories.d/*.list + $OWTMP/etc/apk/keys
+    CMD env IPKG_INSTROOT="$OWTMP" \
+    "$HOST_ROOT/lib/libc.so" \
+	--library-path "$HOST_ROOT/lib:$HOST_ROOT/usr/lib" \
+	"$HOST_ROOT/usr/bin/apk" \
+	--root "$OWTMP" \
+	--no-logfile \
+	--no-interactive \
+	--preserve-env \
+	--cache-dir "$CACHE" \
+	"$@"
+}
+
+# same as OpenWrt include/rootfs.mk prepare_rootfs for apk
+APK_POSTINST(){
+    DB="$OWTMP/lib/apk/db"
+    [ -f "$DB/scripts.tar.gz" ] || return 0
+    gzip -d -f "$DB/scripts.tar.gz" || return 1
+    tar -C "$DB" -xf "$DB/scripts.tar" --wildcards "*.post-install" 2>/dev/null
+    (
+    cd "$OWTMP" || exit 1
+    for script in ./lib/apk/db/*.post-install; do
+	[ -f "$script" ] || continue
+	echo "[i] post-install $(basename $script)">&2
+	IPKG_INSTROOT="$OWTMP" $(command -v bash) $script || {
+	    echo "[e] post-install script $script has failed">&2
+	    exit 1
+	}
+	tar --delete -f ./lib/apk/db/scripts.tar $(basename $script)
+	rm -f "$script"
+    done
+    )
+    r=$?
+    gzip -f -9n -S ".gz" "$DB/scripts.tar"
+    return $r
+}
+
+## OPKG ##
+
+OPKG(){
+    CONF="$OPKG_CONF.$REL"
+    [ -s "$CONF" ] || {
+	echo "[i] create opkg config : $CONF">&2
+	sh $PR/opkg.conf.tpl > $CONF
+    }
+    CMD HOST_RUN "$HOST_ROOT/bin/opkg" \
+	--force-space --conf "$CONF" --cache "$CACHE" "$@"
+}
+
+ACTION="$1"
+[ "$ACTION" ] && shift
+
+case $PKG_MGR in
+    apk)
+    case "$ACTION" in
+	update)
+	APK update
+	;;
+	install|add)
+	# official feeds only have .apk packages
+	APK add --no-scripts --force-overwrite "$@"
+	;;
+	remove|del)
+	APK del --no-scripts "$@"
+	;;
+	list-installed)
+	APK list --installed
+	;;
+	postinst)
+	APK_POSTINST
+	;;
+	raw)
+	APK "$@"
+	;;
+	*)
+	echo "[e] unknown action: $ACTION">&2
+	exit 1
+	;;
+    esac
+    ;;
+    opkg)
+    case "$ACTION" in
+	add)      OPKG install "$@" ;;
+	del)      OPKG remove "$@" ;;
+	postinst) exit 0 ;;
+	raw)      OPKG "$@" ;;
+	*)        OPKG "$ACTION" "$@" ;;
+    esac
+    ;;
+    *)
+    echo "[e] unknown PKG_MGR=$PKG_MGR">&2
+    exit 1
+    ;;
+esac

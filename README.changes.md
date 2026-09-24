@@ -1,5 +1,19 @@
 # OpenWrt Khadas Change log
 
+## OpenWrt Khadas Edge rel 25.12.5
+
++ updated openwrt base to 25.12.5 (target armvirt -> armsr/armv8)
++ Khadas Edge (RK3399) only
++ apk package manager support (25.x+), opkg kept for 23.05 / 24.10
++ firewall: iptables fw3 by default (khadas 5.14 kernel has no nft nat modules),
+  FIREWALL=fw4 optional
++ packages: samba36 -> samba4, wireguard -> wireguard-tools + luci-proto-wireguard,
+  libpcre -> libpcre2, wpad-wolfssl -> wpad-mbedtls, + iperf3,
+  triggerhappy removed (dropped from OpenWrt)
++ network config: netifd `device` / bridge `ports` syntax
++ preinit: use stock OpenWrt preinit + khadas hooks, failsafe off via 00_preinit.conf
++ travis-ci -> github actions
+
 ## OpenWrt Khadas rel 21.02.0
 
 + updated openwrt base to 21.02.0

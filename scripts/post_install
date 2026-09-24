@@ -7,36 +7,39 @@
 PR=$(dirname $0)
 
 . $PR/build.conf
+. $PR/build.lib
 
-opkg=$PR/opkg
+pkg=$PR/pkg
 
-echo "[i] install packages">&2
+echo "[i] install packages ($PKG_MGR)">&2
 
-[ -d /tmp/opkg-lists ] || {
-    echo "[i] opkg update">&2
-    $opkg update
-}
+$pkg update || FAIL "$PKG_MGR update"
 
-for p in /tmp/opkg-lists/openwrt_*; do
-    [ -f $p ] || {
-        echo "[i] opkg update">&2
-	$opkg update
-    }
-    [ -s $p ] || {
-        echo "[i] opkg update">&2
-	$opkg update
-    }
-done
-
-
-#    ppp-mod-pptp \
-#    luci-proto-ppp \
+## firewall
+case $FIREWALL in
+    fw3)
+    echo "[i] firewall: fw3 (iptables)">&2
+    case $PKG_MGR in
+	apk)
+	# replace firewall4 by firewall (fw3) in one transaction
+	$pkg install firewall iptables-zz-legacy '!firewall4' || FAIL firewall
+	;;
+	*)
+	$pkg remove --force-depends firewall4
+	$pkg install firewall iptables-zz-legacy || FAIL firewall
+	;;
+    esac
+    ;;
+    *)
+    echo "[i] firewall: fw4 (nftables)">&2
+    ;;
+esac
 
 # mountd
 # avahi-daemon-service-ssh avahi-daemon-service-http \
 # blockd
 
-$opkg install rsync bwm-ng curl procps-ng-pkill tcpdump nano mc \
+$pkg install rsync bwm-ng curl procps-ng-pkill tcpdump nano mc \
     fdisk sfdisk i2c-tools usbutils evtest netcat aria2 \
     shadow-useradd shadow-userdel shadow-usermod \
     gzip tar unzip unrar coreutils-dd coreutils-stat \
@@ -44,39 +47,27 @@ $opkg install rsync bwm-ng curl procps-ng-pkill tcpdump nano mc \
     coreutils-stty \
     avahi-dbus-daemon avahi-utils \
     mount-utils dosfstools e2fsprogs resize2fs blkid losetup dtc uboot-envtools \
-    comgt luci-proto-3g usb-modeswitch usbreset \
-    triggerhappy kmod-hid \
-    iw wpad-wolfssl wpa-cli \
+    comgt luci-proto-3g usb-modeswitch \
+    kmod-hid \
+    iw wpad-mbedtls wpa-cli \
     wireless-tools iwinfo \
-    iperf pv \
+    iperf iperf3 pv \
     ttyd \
-    samba36-client cifsmount \
+    samba4-client cifsmount \
     nfs-utils \
-    ppp-mod-pptp \
-    iptables-mod-tproxy \
-    iptables-mod-trace \
-    ipset libpcre \
-    wpan-tools wireguard luci-app-wireguard \
-    pciutils 
+    ppp-mod-pptp luci-proto-ppp \
+    ipset libpcre2 \
+    wpan-tools wireguard-tools luci-proto-wireguard \
+    pciutils \
+    libzstd zstd \
+    || FAIL "install base packages"
+
+[ "$FIREWALL" = "fw3" ] && {
+    $pkg install iptables-mod-tproxy iptables-mod-trace \
+    || FAIL "install iptables modules"
+}
 
 #    openvpn-mbedtls luci-app-openvpn \
 #    luci-app-https-dns-proxy \
 
-
-#    shadowsocks-libev-ss-redir shadowsocks-libev-ss-local shadowsocks-libev-ss-rules shadowsocks-libev-config luci-app-shadowsocks-libev \
-
-case $REL in
-    18*)
-    $opkg install zip
-    ;;
-    19*)
-    echo ""
-    $opkg install libzstd zstd
-#   $opkg install mkf2fs f2fs-tools
-    ;;
-    21*)
-    echo ""
-    $opkg install libzstd zstd blkid losetup
-    ;;
-esac
-
+exit 0

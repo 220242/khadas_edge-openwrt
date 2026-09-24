@@ -6,8 +6,8 @@
 
 board_config_update
 
-ucidef_set_board_id "VIM"
-ucidef_set_model_name "VIM"
+ucidef_set_board_id "khadas,edge"
+ucidef_set_model_name "Khadas Edge"
 
 board_config_flush
 

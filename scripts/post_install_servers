@@ -5,7 +5,7 @@
 #= post install servers variant
 
 PR=$(dirname $0)
-opkg=$PR/opkg
+pkg=$PR/pkg
 
 NAME=${0#*post_install_}
 
@@ -14,17 +14,8 @@ NAME=${0#*post_install_}
 
 echo "[i] add $NAME">&2
 
-$opkg install openssh-client openssh-sftp-server
-$opkg install luci-app-sqm
-$opkg install samba36-server luci-app-samba
-$opkg install blockd
-
-case $REL in
-    18*)
-    echo "[i] nfs broken not usable plz use 19.X series">&2
-    ;;
-    19*)
-    $opkg install nfs-kernel-server nfs-kernel-server-utils
-    ;;
-esac
-
+$pkg install openssh-client openssh-sftp-server || FAIL
+$pkg install luci-app-sqm || FAIL
+$pkg install samba4-server luci-app-samba4 || FAIL
+$pkg install blockd || FAIL
+$pkg install nfs-kernel-server nfs-kernel-server-utils || FAIL
