@@ -1,5 +1,17 @@
 # OpenWrt Khadas Change log
 
+## OpenWrt Khadas Edge 25.12.5 source build
+
++ full OpenWrt 25.12.5 source build: rockchip/armv8, Linux 6.12, mainline U-Boot 2025.10 + TF-A
++ new devices: Khadas Edge, Edge-V, Edge-Captain
++ kernel with KVM
++ Wi-Fi AX / BE: Intel AX200 / AX210 / BE200, MediaTek MT7921 / MT7922 / MT7925 / MT7915 / MT7916 / MT7996,
+  Realtek RTL8852AE / BE / CE, RTL8851BE, RTL8922AE, Qualcomm WCN6855 / WCN7850, onboard AP6356S
++ 4G / 5G modems: ModemManager, QMI, MBIM, NCM, MHI (M.2 PCIe)
++ virtual machines: QEMU/KVM + LuCI app `luci-app-kvm` (Services → Virtual Machines)
++ containers: Docker (luci-app-dockerman), LXC (luci-app-lxc)
++ GitHub Actions build + release
+
 ## OpenWrt Khadas Edge rel 25.12.5
 
 + updated openwrt base to 25.12.5 (target armvirt -> armsr/armv8)

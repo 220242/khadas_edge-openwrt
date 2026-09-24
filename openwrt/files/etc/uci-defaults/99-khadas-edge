@@ -1,0 +1,11 @@
+#!/bin/sh
+# first boot defaults for Khadas Edge
+
+[ "$(uci -q get system.@system[0].hostname)" = "OpenWrt" ] && \
+	uci set system.@system[0].hostname='khadas-edge'
+
+# VM / container storage
+mkdir -p /mnt/vm
+
+uci commit system
+exit 0

@@ -1,0 +1,14 @@
+{
+	"admin/services/kvm": {
+		"title": "Virtual Machines",
+		"order": 60,
+		"action": {
+			"type": "view",
+			"path": "kvm/vms"
+		},
+		"depends": {
+			"acl": [ "luci-app-kvm" ],
+			"uci": { "kvm": true }
+		}
+	}
+}

@@ -1,0 +1,144 @@
+# OpenWrt 25.12 for Khadas Edge / Edge-V / Edge-Captain (RockChip RK3399)
+# seed config: cp diffconfig .config && make defconfig
+
+## target
+CONFIG_TARGET_rockchip=y
+CONFIG_TARGET_rockchip_armv8=y
+CONFIG_TARGET_MULTI_PROFILE=y
+CONFIG_TARGET_PER_DEVICE_ROOTFS=y
+CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_khadas_edge=y
+CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_khadas_edge-v=y
+CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_khadas_edge-captain=y
+# room for docker images / VM disks on the internal storage
+CONFIG_TARGET_ROOTFS_PARTSIZE=2048
+
+## kernel features for containers
+CONFIG_KERNEL_CGROUPS=y
+CONFIG_KERNEL_NAMESPACES=y
+CONFIG_KERNEL_KEYS=y
+CONFIG_KERNEL_SECCOMP=y
+CONFIG_KERNEL_POSIX_MQUEUE=y
+CONFIG_DOCKER_CGROUP_OPTIONS=y
+CONFIG_DOCKER_NET_MACVLAN=y
+CONFIG_DOCKER_STO_EXT4=y
+
+## web interface
+CONFIG_PACKAGE_luci=y
+CONFIG_PACKAGE_luci-ssl=y
+CONFIG_PACKAGE_luci-app-ttyd=y
+
+## Wi-Fi: full hostapd / wpa_supplicant (802.11ax / 802.11be)
+# CONFIG_PACKAGE_wpad-basic-mbedtls is not set
+CONFIG_PACKAGE_wpad-mbedtls=y
+CONFIG_PACKAGE_iw=y
+CONFIG_PACKAGE_iwinfo=y
+# onboard AP6356S (BCM4356 SDIO)
+CONFIG_PACKAGE_kmod-brcmfmac=y
+CONFIG_PACKAGE_brcmfmac-nvram-4356-sdio=y
+CONFIG_PACKAGE_cypress-firmware-4356-sdio=y
+# Intel AX200 / AX210 / BE200
+CONFIG_PACKAGE_kmod-iwlwifi=y
+CONFIG_PACKAGE_iwlwifi-firmware-ax200=y
+CONFIG_PACKAGE_iwlwifi-firmware-ax210=y
+CONFIG_PACKAGE_iwlwifi-firmware-be200=y
+# MediaTek MT7921 / MT7922 / MT7925 (PCIe + USB), MT7915 / MT7916, MT7996 / MT7992 (BE)
+CONFIG_PACKAGE_kmod-mt7921e=y
+CONFIG_PACKAGE_kmod-mt7921u=y
+CONFIG_PACKAGE_kmod-mt7922-firmware=y
+CONFIG_PACKAGE_kmod-mt7925e=y
+CONFIG_PACKAGE_kmod-mt7925u=y
+CONFIG_PACKAGE_kmod-mt7915e=y
+CONFIG_PACKAGE_kmod-mt7916-firmware=y
+CONFIG_PACKAGE_kmod-mt7996e=y
+CONFIG_PACKAGE_kmod-mt7996-firmware=y
+CONFIG_PACKAGE_kmod-mt7992-firmware=y
+# Realtek RTL8852AE / RTL8852BE / RTL8852CE / RTL8851BE / RTL8922AE (BE)
+CONFIG_PACKAGE_kmod-rtw89-8852ae=y
+CONFIG_PACKAGE_kmod-rtw89-8852be=y
+CONFIG_PACKAGE_kmod-rtw89-8852ce=y
+CONFIG_PACKAGE_kmod-rtw89-8851be=y
+CONFIG_PACKAGE_kmod-rtw89-8922ae=y
+# Qualcomm WCN6855 (AX) / WCN7850 (BE)
+CONFIG_PACKAGE_kmod-ath11k-pci=y
+CONFIG_PACKAGE_ath11k-firmware-wcn6855=y
+CONFIG_PACKAGE_kmod-ath12k=y
+CONFIG_PACKAGE_ath12k-firmware-wcn7850=y
+
+## 4G / 5G modems (USB and M.2 PCIe)
+CONFIG_PACKAGE_modemmanager=y
+CONFIG_PACKAGE_luci-proto-modemmanager=y
+CONFIG_PACKAGE_luci-proto-qmi=y
+CONFIG_PACKAGE_luci-proto-mbim=y
+CONFIG_PACKAGE_luci-proto-ncm=y
+CONFIG_PACKAGE_luci-proto-3g=y
+CONFIG_PACKAGE_uqmi=y
+CONFIG_PACKAGE_umbim=y
+CONFIG_PACKAGE_qmi-utils=y
+CONFIG_PACKAGE_mbim-utils=y
+CONFIG_PACKAGE_sms-tool=y
+CONFIG_PACKAGE_picocom=y
+CONFIG_PACKAGE_usb-modeswitch=y
+CONFIG_PACKAGE_kmod-usb-net-qmi-wwan=y
+CONFIG_PACKAGE_kmod-usb-net-cdc-mbim=y
+CONFIG_PACKAGE_kmod-usb-net-cdc-ncm=y
+CONFIG_PACKAGE_kmod-usb-net-cdc-ether=y
+CONFIG_PACKAGE_kmod-usb-net-rndis=y
+CONFIG_PACKAGE_kmod-usb-net-huawei-cdc-ncm=y
+CONFIG_PACKAGE_kmod-usb-serial-option=y
+CONFIG_PACKAGE_kmod-usb-serial-qualcomm=y
+CONFIG_PACKAGE_kmod-usb-acm=y
+CONFIG_PACKAGE_kmod-wwan=y
+CONFIG_PACKAGE_kmod-mhi-pci-generic=y
+CONFIG_PACKAGE_kmod-mhi-wwan-ctrl=y
+CONFIG_PACKAGE_kmod-mhi-wwan-mbim=y
+CONFIG_PACKAGE_kmod-mhi-net=y
+
+## containers: Docker + LXC
+CONFIG_PACKAGE_dockerd=y
+CONFIG_PACKAGE_docker=y
+CONFIG_PACKAGE_docker-compose=y
+CONFIG_PACKAGE_luci-app-dockerman=y
+CONFIG_PACKAGE_iptables-nft=y
+CONFIG_PACKAGE_ip6tables-nft=y
+CONFIG_PACKAGE_lxc=y
+CONFIG_PACKAGE_lxc-auto=y
+CONFIG_PACKAGE_luci-app-lxc=y
+CONFIG_PACKAGE_tar=y
+CONFIG_PACKAGE_xz-utils=y
+CONFIG_PACKAGE_kmod-veth=y
+CONFIG_PACKAGE_kmod-br-netfilter=y
+CONFIG_PACKAGE_kmod-ikconfig=y
+
+## virtual machines: KVM / QEMU
+CONFIG_PACKAGE_luci-app-kvm=y
+CONFIG_PACKAGE_qemu-aarch64-softmmu=y
+CONFIG_PACKAGE_qemu-img=y
+CONFIG_PACKAGE_kmod-vhost-net=y
+CONFIG_PACKAGE_kmod-tun=y
+CONFIG_PACKAGE_taskset=y
+
+## storage
+CONFIG_PACKAGE_block-mount=y
+CONFIG_PACKAGE_kmod-nvme=y
+CONFIG_PACKAGE_kmod-usb-storage=y
+CONFIG_PACKAGE_kmod-usb-storage-uas=y
+CONFIG_PACKAGE_kmod-fs-ext4=y
+CONFIG_PACKAGE_kmod-fs-btrfs=y
+CONFIG_PACKAGE_btrfs-progs=y
+CONFIG_PACKAGE_e2fsprogs=y
+CONFIG_PACKAGE_fdisk=y
+CONFIG_PACKAGE_lsblk=y
+
+## USB ethernet
+CONFIG_PACKAGE_kmod-usb-net-rtl8152=y
+CONFIG_PACKAGE_kmod-r8169=y
+
+## tools
+CONFIG_PACKAGE_nano=y
+CONFIG_PACKAGE_htop=y
+CONFIG_PACKAGE_curl=y
+CONFIG_PACKAGE_tcpdump=y
+CONFIG_PACKAGE_iperf3=y
+CONFIG_PACKAGE_wireguard-tools=y
+CONFIG_PACKAGE_luci-proto-wireguard=y
+CONFIG_PACKAGE_openssh-sftp-server=y

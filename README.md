@@ -1,6 +1,7 @@
 # khadas edge openwrt
 
-OpenWrt for Khadas Edge boards https://docs.khadas.com/edge/ (RockChip RK3399)
+OpenWrt 25.12 for Khadas Edge boards https://docs.khadas.com/edge/ (RockChip RK3399):
+**Edge**, **Edge-V**, **Edge-Captain**.
 
 ![khadas vims openwrt](pics/khadas_vim_openwrt.jpg)
 
@@ -8,80 +9,102 @@ OpenWrt for Khadas Edge boards https://docs.khadas.com/edge/ (RockChip RK3399)
 
 + [README.changes.md](README.changes.md)
 
-## supported Boards
+## What's inside
 
-+ [khadas Edge / Edge-V / Captain](https://docs.khadas.com/edge) - OK
+Full OpenWrt source build (`rockchip/armv8` target, Linux 6.12, mainline U-Boot + TF-A),
+Khadas Edge boards added as OpenWrt devices, kernel built with **KVM**.
 
-## OpenWrt base
++ **Wi-Fi 6 / 6E / 7 (AX / BE)** PCIe M.2 and USB cards
+  + Intel AX200, AX210, BE200 (`iwlwifi`)
+  + MediaTek MT7921 / MT7922 / MT7925 (PCIe + USB), MT7915 / MT7916, MT7996 / MT7992 (BE)
+  + Realtek RTL8852AE / RTL8852BE / RTL8852CE / RTL8851BE / RTL8922AE (BE)
+  + Qualcomm WCN6855 (AX, ath11k), WCN7850 (BE, ath12k)
+  + onboard AP6356S (BCM4356 SDIO)
+  + full `wpad-mbedtls` (hostapd + wpa_supplicant with 802.11ax / 802.11be)
+  + note: Intel cards work as client only (no 5 GHz / 6 GHz access point),
+    for an access point use MediaTek / Qualcomm cards
++ **4G / 5G modems** USB and M.2 PCIe (MHI): Quectel RM5xx / RG5xx, Sierra, Fibocom, Huawei ...
+  + ModemManager + LuCI protocol (`Network → Interfaces → Add → ModemManager`)
+  + QMI / MBIM / NCM / RNDIS / serial, `uqmi`, `umbim`, `qmicli`, `mbimcli`, `sms-tool`
++ **Virtual machines (KVM / QEMU)** - `Services → Virtual Machines`
+  + arm64 guests with UEFI (Debian, Ubuntu, Alpine, OpenWrt ...), install from ISO
+  + virtio disk / network (bridged to `br-lan`), VNC screen, autostart
++ **Containers**
+  + Docker + docker-compose, LuCI `Docker` (luci-app-dockerman)
+  + LXC, LuCI `Services → LXC Containers`
++ storage: NVMe (Edge-Captain M.2), USB, ext4 / btrfs, 2 GB root partition
 
-+ **25.12.x** (default) - `apk` package manager
-+ 24.10.x / 23.05.x - `opkg` package manager
+## Images
 
-userspace comes from the official OpenWrt `armsr/armv8` rootfs,
-kernel / dtb / u-boot - from Khadas releases (linux 5.14).
+GitHub Actions builds images on every push (Actions → build → artifacts) and
+publishes a release for `v*` tags:
 
-The Khadas 5.14 kernel is built without the nftables modules required by
-`firewall4`, so the image uses the iptables based `firewall` (fw3)
-by default. With a kernel that has them, set `FIREWALL=fw4`.
++ `openwrt-25.12.5-rockchip-armv8-khadas_edge-v-squashfs-sysupgrade.img.gz` - Edge-V
++ `openwrt-25.12.5-rockchip-armv8-khadas_edge-captain-squashfs-sysupgrade.img.gz` - Edge-Captain
++ `openwrt-25.12.5-rockchip-armv8-khadas_edge-squashfs-sysupgrade.img.gz` - Edge (module)
 
 ## Build
+
+~2-4 hours, ~40 GB disk, Linux host with OpenWrt build dependencies
+(https://openwrt.org/docs/guide-developer/toolchain/install-buildsystem)
 
 ```
 git clone https://github.com/220242/khadas_edge-openwrt.git
 cd khadas_edge-openwrt
 
-# ./scripts/build_prepare      # if some tools missed
+./openwrt/build.sh           # images -> out/
+./openwrt/build.sh prepare   # only prepare tree in build/openwrt (then: make menuconfig)
 
-# build openwrt for Edge (OpenWrt 25.12.x)
-./scripts/build -e
-#
-./scripts/build -e emmc     # build openwrt for Edge emmc image
-#
-./scripts/build -e +servers # build openwrt server variant for Edge
-#
-./scripts/build -e -r       # force refresh package manager & lists
-#
-./scripts/build -e -rel=24.10.8          # build openwrt 24.10.8 (opkg)
-echo REL=24.10.8 > scripts/build.conf.user # same, permanent
-#
-echo FIREWALL=fw4 >> scripts/build.conf.user # nftables firewall4
-#
+OW_REL=v25.12.5 JOBS=8 ./openwrt/build.sh
 ```
 
-result: `/tmp/Edge.OpenWrt..sd.v25.12.5.img.gz`
-
-required host tools: `rsync curl wget bash sfdisk gzip mkimage mksquashfs
-mkfs.ext4 mkfs.vfat mdir mcopy`
++ [openwrt/patches](openwrt/patches) - Khadas Edge devices, KVM kernel config, QEMU for rockchip
++ [openwrt/diffconfig](openwrt/diffconfig) - package selection
++ [openwrt/feed/luci-app-kvm](openwrt/feed/luci-app-kvm) - VM manager (LuCI + procd)
++ [openwrt/files](openwrt/files) - rootfs overlay
 
 ## Installation
 
-just write image to SD card
+write image to SD card or eMMC
 
 ```
-gzip -dc Edge.OpenWrt..sd.v25.12.5.img.gz | sudo dd bs=1M of=/dev/SD_PATH
+gzip -dc openwrt-*-khadas_edge-v-squashfs-sysupgrade.img.gz | sudo dd bs=1M of=/dev/SD_PATH
 sync
 ```
 
-## install to emmc inside openwrt booted from sd
+RK3399 boots from SPI flash, then eMMC, then SD card. To boot from SD card
+the bootloader in SPI flash / eMMC must be erased (or use Krescue / Oowow to
+write the image directly to eMMC). See [files/docs](files/docs).
 
-    root@openwrt:/# mmc_install_from_sd
+first boot: LAN `eth0` 192.168.1.1, LuCI http://192.168.1.1, user `root` without password.
+Internet: 5G modem (ModemManager) or Wi-Fi client (`Network → Wireless → Scan`).
 
-## docs & how to
+## Virtual machines quick start
 
-+ [files/docs](files/docs)
-+ [README.openwrt.vims.md](README.openwrt.vims.md)
+```
+# storage for VMs, e.g. NVMe on Edge-Captain
+mkfs.ext4 /dev/nvme0n1 && mkdir -p /mnt/vm && mount /dev/nvme0n1 /mnt/vm
+cd /mnt/vm && wget https://cdimage.debian.org/debian-cd/current/arm64/iso-cd/debian-13.1.0-arm64-netinst.iso
+```
+
+`Services → Virtual Machines`: add VM, set disk `/mnt/vm/debian.qcow2`, disk size `16G`,
+CD image, VNC display `0`, enable `Run`, `Save & Apply`, connect VNC client to `192.168.1.1:5900`.
+
+RK3399 is big.LITTLE (4x Cortex-A53 + 2x Cortex-A72): KVM vCPUs are pinned to one
+core type with `CPU affinity` (default `4-5`, A72).
+
+## Legacy build
+
+`scripts/build` - old repack build (Khadas 5.14 kernel + OpenWrt armsr userspace),
+no AX / BE Wi-Fi drivers and no KVM in that kernel.
 
 ## related projects
 
 + https://github.com/hyphop/khadas-openwrt (upstream, VIMs + Edge)
-+ https://github.com/hyphop/khadas-linux-kernel
-+ https://github.com/hyphop/khadas-uboot
-+ https://github.com/hyphop/khadas-rescue
-+ https://github.com/hyphop/khadas-rescue-tools
++ https://github.com/openwrt/openwrt
 
 ## links
 
 + https://openwrt.org/
 + https://docs.khadas.com/edge/
 + https://github.com/khadas
-+ https://docs.khadas.com

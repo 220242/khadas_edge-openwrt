@@ -1,0 +1,17 @@
+{
+	"luci-app-kvm": {
+		"description": "Grant access to KVM virtual machines",
+		"read": {
+			"file": {
+				"/dev/kvm": [ "list" ]
+			},
+			"ubus": {
+				"service": [ "list" ]
+			},
+			"uci": [ "kvm" ]
+		},
+		"write": {
+			"uci": [ "kvm" ]
+		}
+	}
+}

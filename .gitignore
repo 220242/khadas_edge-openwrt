@@ -9,3 +9,5 @@ tmp/*
 /dl
 /work
 !README.md
+build/
+out/
