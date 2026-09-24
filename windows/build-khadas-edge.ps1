@@ -283,14 +283,20 @@ export DEBIAN_FRONTEND=noninteractive
 BUILD_USER="$1"
 
 id "$BUILD_USER" >/dev/null 2>&1 || useradd -m -s /bin/bash "$BUILD_USER"
+B_UID=$(id -u "$BUILD_USER")
+B_GID=$(id -g "$BUILD_USER")
 
-# no Windows PATH (spaces break the OpenWrt build), build user by default
+# no Windows PATH (spaces break the OpenWrt build), build user by default,
+# Windows drives (/mnt/d) owned by the build user so it can write out/ and logs/
 cat > /etc/wsl.conf <<EOF
 [boot]
 systemd=false
 
 [user]
 default=$BUILD_USER
+
+[automount]
+options = "uid=$B_UID,gid=$B_GID,umask=022"
 
 [interop]
 appendWindowsPath=false
@@ -324,6 +330,14 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 export LC_ALL=C.UTF-8
 umask 022
 
+mkdir -p "$OUT" "$(dirname "$LOG")" 2>/dev/null || true
+if ! touch "$LOG" 2>/dev/null || ! touch "$OUT/.write-test" 2>/dev/null; then
+	echo "ОШИБКА: нет прав на запись в $OUT или $LOG." >&2
+	echo "Выполните в PowerShell: wsl --shutdown  и запустите скрипт ещё раз." >&2
+	exit 3
+fi
+rm -f "$OUT/.write-test"
+
 PROJECT="$HOME/khadas_edge-openwrt"
 if [ -d "$PROJECT/.git" ]; then
 	echo "==> обновление проекта ($BRANCH)"
@@ -341,7 +355,6 @@ if [ "$CLEAN" = 1 ] && [ -d build/openwrt ]; then
 	make -C build/openwrt clean
 fi
 
-mkdir -p "$OUT"
 STEP=
 [ "$MODE" = prepare ] && STEP=prepare
 JOBS="$JOBS" ZT_CONTROLLER="$ZT" OUT="$OUT" ./openwrt/build.sh $STEP 2>&1 | tee "$LOG"
