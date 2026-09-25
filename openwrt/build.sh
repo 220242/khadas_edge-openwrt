@@ -30,9 +30,12 @@ ROOT=$(cd "$TOP/.." && pwd)
 
 OW_REL=${OW_REL:-v25.12.5}
 OW_GIT=${OW_GIT:-https://github.com/openwrt/openwrt.git}
-KVM=${KVM:-0}
+# not exported further: the kernel build takes KVM from the environment
+# (virt/kvm/Makefile.kvm: KVM ?= ../../../virt/kvm)
+WITH_KVM=${KVM:-0}
+unset KVM
 VSUFFIX=
-[ "$KVM" = 1 ] && VSUFFIX=-kvm
+[ "$WITH_KVM" = 1 ] && VSUFFIX=-kvm
 SRC=${SRC:-$ROOT/build/openwrt$VSUFFIX}
 JOBS=${JOBS:-$(nproc)}
 OUT=${OUT:-$ROOT/out}
@@ -68,7 +71,7 @@ fi
 cd "$SRC"
 
 PATCHES="$TOP/patches"
-[ "$KVM" = 1 ] && PATCHES="$PATCHES $TOP/patches-kvm"
+[ "$WITH_KVM" = 1 ] && PATCHES="$PATCHES $TOP/patches-kvm"
 for d in $PATCHES; do
 	for p in "$d"/*.patch; do
 		apply_patch "$SRC" "$p"
@@ -112,7 +115,7 @@ fi
 ## config
 cp "$TOP/diffconfig" .config
 CONFIGS="$TOP/diffconfig"
-if [ "$KVM" = 1 ]; then
+if [ "$WITH_KVM" = 1 ]; then
 	log "KVM variant"
 	cat "$TOP/diffconfig-kvm" >> .config
 	CONFIGS="$CONFIGS $TOP/diffconfig-kvm"
