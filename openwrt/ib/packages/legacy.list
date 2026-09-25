@@ -1,0 +1,19 @@
+# very old PCs (i486 / Pentium / Pentium III): small, no Docker
+-wpad-basic-mbedtls
+wpad-mbedtls
+iw
+khadas-wifi-autoconf
+?kmod-ath9k
+?kmod-ath5k
+?kmod-rt2800-pci
+?kmod-rt2800-usb
+?kmod-rtl8xxxu
+?kmod-e100
+?kmod-e1000
+?kmod-8139too
+?kmod-via-rhine
+?kmod-pcnet32
+?kmod-natsemi
+?kmod-r8169
+?kmod-tulip
+?kmod-3c59x

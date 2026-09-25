@@ -1,0 +1,19 @@
+From: khadas_edge-openwrt
+Subject: [PATCH] rockchip: khadas-edge-v: enable HDMI output
+
+The boot loader shows up on HDMI (stdout=serial,vidconsole is set by
+evb_rk3399.h), like on the other RK3399 boards with HDMI.
+
+diff --git a/configs/khadas-edge-v-rk3399_defconfig b/configs/khadas-edge-v-rk3399_defconfig
+index 3903c4e2..fd5df49e 100644
+--- a/configs/khadas-edge-v-rk3399_defconfig
++++ b/configs/khadas-edge-v-rk3399_defconfig
+@@ -85,4 +85,8 @@ CONFIG_USB_ETHER_SMSC95XX=y
+ CONFIG_USB_GADGET=y
+ CONFIG_USB_GADGET_DOWNLOAD=y
+ CONFIG_USB_FUNCTION_ROCKUSB=y
++CONFIG_VIDEO=y
++CONFIG_DISPLAY=y
++CONFIG_VIDEO_ROCKCHIP=y
++CONFIG_DISPLAY_ROCKCHIP_HDMI=y
+ CONFIG_ERRNO_STR=y

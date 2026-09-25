@@ -1,0 +1,36 @@
+# Wi-Fi: full hostapd / wpa_supplicant (AX / BE), access point on every card
+-wpad-basic-mbedtls
+wpad-mbedtls
+iw
+iwinfo
+khadas-wifi-autoconf
+# Intel AX200 / AX210 / BE200
+?kmod-iwlwifi
+?iwlwifi-firmware-ax200
+?iwlwifi-firmware-ax210
+?iwlwifi-firmware-be200
+# MediaTek
+?kmod-mt7921e
+?kmod-mt7921u
+?kmod-mt7922-firmware
+?kmod-mt7925e
+?kmod-mt7925u
+?kmod-mt7915e
+?kmod-mt7916-firmware
+?kmod-mt7996e
+?kmod-mt7996-firmware
+?kmod-mt7992-firmware
+# Realtek
+?kmod-rtw89-8852ae
+?kmod-rtw89-8852be
+?kmod-rtw89-8852ce
+?kmod-rtw89-8851be
+?kmod-rtw89-8922ae
+# Qualcomm / Atheros
+?kmod-ath11k-pci
+?ath11k-firmware-wcn6855
+?kmod-ath12k
+?ath12k-firmware-wcn7850
+?kmod-ath10k
+?ath10k-firmware-qca988x
+?kmod-ath9k

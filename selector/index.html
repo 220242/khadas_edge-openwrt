@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenWrt Firmware Selector</title>
+<meta name="description" content="OpenWrt 25.12 images: Khadas Edge-V, x86_64 PC, virtual machines (Proxmox, VMware, VirtualBox, Hyper-V), 32-bit PC">
+<style>
+:root {
+	--bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #5d6677;
+	--line: #dde1e8; --accent: #1f6feb; --accent-text: #ffffff; --soft: #eef3fd;
+	--ok: #1a7f37; --warn: #9a6700; --code: #f1f3f6;
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) {
+		--bg: #0f1218; --panel: #171b23; --text: #e6e9ef; --muted: #9aa3b2;
+		--line: #2a303b; --accent: #4c8dff; --accent-text: #0b0e13; --soft: #1b2436;
+		--ok: #3fb950; --warn: #d29922; --code: #1f2430;
+	}
+}
+:root[data-theme="dark"] {
+	--bg: #0f1218; --panel: #171b23; --text: #e6e9ef; --muted: #9aa3b2;
+	--line: #2a303b; --accent: #4c8dff; --accent-text: #0b0e13; --soft: #1b2436;
+	--ok: #3fb950; --warn: #d29922; --code: #1f2430;
+}
+* { box-sizing: border-box; }
+body {
+	margin: 0; background: var(--bg); color: var(--text);
+	font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.wrap { max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; justify-content: space-between; }
+h1 { font-size: 22px; margin: 0; }
+.sub { color: var(--muted); margin: 4px 0 20px; }
+.tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+select, button {
+	font: inherit; color: var(--text); background: var(--panel);
+	border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px;
+}
+button { cursor: pointer; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.dev {
+	text-align: left; padding: 12px; border-radius: 12px; background: var(--panel);
+	border: 1px solid var(--line); min-height: 92px;
+}
+.dev b { display: block; font-size: 15px; }
+.dev span { color: var(--muted); font-size: 13px; }
+.dev[aria-pressed="true"] { border-color: var(--accent); background: var(--soft); box-shadow: 0 0 0 1px var(--accent) inset; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-top: 16px; }
+.panel h2 { font-size: 18px; margin: 0 0 4px; }
+.files { display: grid; gap: 8px; margin: 12px 0; }
+.file {
+	display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+	border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+}
+.file .what { flex: 1 1 220px; min-width: 0; }
+.file .what b { display: block; }
+.file .what small { color: var(--muted); word-break: break-all; }
+a.dl {
+	background: var(--accent); color: var(--accent-text); text-decoration: none;
+	border-radius: 8px; padding: 6px 14px; font-weight: 600; white-space: nowrap;
+}
+.sha { font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); word-break: break-all; flex-basis: 100%; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 12px 0 8px; }
+.tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+pre {
+	background: var(--code); border-radius: 8px; padding: 10px 12px; overflow-x: auto;
+	font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; margin: 8px 0;
+}
+.steps li { margin: 4px 0; }
+.note { color: var(--muted); font-size: 13px; }
+.warn { color: var(--warn); }
+.empty { color: var(--muted); padding: 8px 0; }
+a { color: var(--accent); }
+footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+	<header>
+		<div>
+			<h1 data-t="title">OpenWrt: выбор прошивки</h1>
+		</div>
+		<div class="tools">
+			<label><span data-t="release">Релиз</span> <select id="rel"></select></label>
+			<button id="lang" type="button">EN</button>
+			<button id="theme" type="button" aria-label="theme">◐</button>
+		</div>
+	</header>
+	<p class="sub" data-t="subtitle">OpenWrt 25.12: Khadas Edge-V, ПК x86_64, виртуальные машины, старые 32-битные ПК. Выберите устройство.</p>
+
+	<div class="grid" id="devices"></div>
+	<div id="out"></div>
+
+	<footer>
+		<span data-t="footer">Образы собирает GitHub Actions из</span>
+		<a id="repolink" href="#"></a>.
+		<span data-t="footer2">Прошивка для x86 содержит официальное ядро OpenWrt: модули ядра ставятся из репозитория OpenWrt.</span>
+	</footer>
+</div>
+
+<script>
+'use strict';
+
+const T = {
+	ru: {
+		title: 'OpenWrt: выбор прошивки', release: 'Релиз',
+		subtitle: 'OpenWrt 25.12: Khadas Edge-V, ПК x86_64, виртуальные машины, старые 32-битные ПК. Выберите устройство.',
+		footer: 'Образы собирает GitHub Actions из', footer2: 'Прошивка для x86 содержит официальное ядро OpenWrt: модули ядра ставятся из репозитория OpenWrt.',
+		download: 'Скачать', install: 'Установка', loading: 'Загрузка списка релизов…',
+		norel: 'Релизов пока нет. Образы последних сборок: GitHub → Actions → build → Artifacts (нужен вход в GitHub).',
+		apierr: 'Не удалось получить релизы GitHub', nofiles: 'В этом релизе нет образов для этого устройства.',
+		pre: 'предварительный', latest: 'последний', first: 'Первый вход',
+		firstText: 'Веб-интерфейс: адрес из роутера (устройство khadas-edge / OpenWrt) или http://khadas-edge.local/. Пользователь root, пароль khadasedge — смените его. С одним сетевым портом он получает адрес по DHCP; с двумя: eth0 = LAN 192.168.1.1, eth1 = WAN.',
+		sha: 'SHA256', manifest: 'Список пакетов',
+	},
+	en: {
+		title: 'OpenWrt firmware selector', release: 'Release',
+		subtitle: 'OpenWrt 25.12: Khadas Edge-V, x86_64 PC, virtual machines, old 32-bit PCs. Pick a device.',
+		footer: 'Images are built by GitHub Actions from', footer2: 'x86 images use the official OpenWrt kernel: kernel modules install from the OpenWrt repository.',
+		download: 'Download', install: 'Installation', loading: 'Loading releases…',
+		norel: 'No releases yet. Images of the latest builds: GitHub → Actions → build → Artifacts (GitHub login needed).',
+		apierr: 'Could not load the GitHub releases', nofiles: 'No images for this device in this release.',
+		pre: 'pre-release', latest: 'latest', first: 'First login',
+		firstText: 'Web interface: the address from your router (device khadas-edge / OpenWrt) or http://khadas-edge.local/. User root, password khadasedge — change it. With one network port it gets its address by DHCP; with two: eth0 = LAN 192.168.1.1, eth1 = WAN.',
+		sha: 'SHA256', manifest: 'Package list',
+	},
+};
+
+// devices: files are matched by the canonical names the build produces
+const DEVICES = [
+	{
+		id: 'edge-v',
+		name: { ru: 'Khadas Edge-V', en: 'Khadas Edge-V' },
+		desc: { ru: 'RK3399, SD-карта / eMMC', en: 'RK3399, SD card / eMMC' },
+		files: [
+			{ re: /khadas_edge-v.*sysupgrade\.img\.gz$/, name: { ru: 'Образ для SD / eMMC (и sysupgrade)', en: 'SD / eMMC image (and sysupgrade)' } },
+			{ re: /khadas_edge-v.*\.manifest$/, manifest: true },
+		],
+		tabs: {
+			'SD / eMMC': {
+				ru: [
+					'Запишите <code>.img.gz</code> на SD-карту через balenaEtcher или Rufus (распаковывать не нужно).',
+					'Загрузчик RK3399 сначала ищет систему в SPI-памяти, потом на eMMC, потом на SD. С заводской системой на eMMC SD-карта игнорируется: запишите образ на eMMC через Krescue (docs.khadas.com) или сотрите загрузчик на eMMC.',
+					'HDMI: логотип U-Boot, затем консоль Linux с адресами платы. Ethernet — к роутеру, плата получит адрес по DHCP.',
+				],
+				en: [
+					'Write the <code>.img.gz</code> to an SD card with balenaEtcher or Rufus (no need to unpack).',
+					'The RK3399 boot ROM tries SPI flash, then eMMC, then SD. With the stock system on the eMMC the SD card is ignored: write the image to the eMMC with Krescue (docs.khadas.com) or erase the eMMC boot loader.',
+					'HDMI: U-Boot logo, then the Linux console with the board addresses. Ethernet to the router, the board gets its address by DHCP.',
+				],
+				cmd: 'gzip -dc openwrt-*-khadas_edge-v-*-sysupgrade.img.gz | sudo dd of=/dev/sdX bs=1M conv=fsync',
+			},
+			'sysupgrade': {
+				ru: ['Обновление работающей системы: Система → Резервная копия / Прошивка → Установить новую прошивку, файл <code>.img.gz</code>.'],
+				en: ['Update a running system: System → Backup / Flash Firmware → Flash image, the <code>.img.gz</code> file.'],
+			},
+		},
+	},
+	{
+		id: 'x86-64-pc',
+		name: { ru: 'ПК / сервер x86_64', en: 'PC / server x86_64' },
+		desc: { ru: 'Wi-Fi, 4G/5G, Docker, сетевые карты', en: 'Wi-Fi, 4G/5G, Docker, NICs' },
+		files: [
+			{ re: /x86-64-pc-efi\.img\.gz$/, name: { ru: 'UEFI (и BIOS) — для большинства ПК', en: 'UEFI (and BIOS) — most PCs' } },
+			{ re: /x86-64-pc-bios\.img\.gz$/, name: { ru: 'Только BIOS (legacy boot)', en: 'BIOS only (legacy boot)' } },
+			{ re: /x86-64-pc\.manifest$/, manifest: true },
+		],
+		tabs: {
+			'USB / SSD': {
+				ru: [
+					'Запишите образ на диск (SSD, USB-флешку) через balenaEtcher / Rufus или <code>dd</code>, загрузитесь с него.',
+					'Разметка: 1 ГБ под систему, остальное место диска можно разметить под данные / Docker (Система → Точки монтирования).',
+				],
+				en: [
+					'Write the image to a disk (SSD, USB stick) with balenaEtcher / Rufus or <code>dd</code> and boot from it.',
+					'Layout: 1 GB for the system, the rest of the disk can hold data / Docker (System → Mount Points).',
+				],
+				cmd: 'gzip -dc openwrt-*-x86-64-pc-efi.img.gz | sudo dd of=/dev/sdX bs=1M conv=fsync',
+			},
+		},
+	},
+	{
+		id: 'x86-64-vm',
+		name: { ru: 'Виртуальная машина x86_64', en: 'Virtual machine x86_64' },
+		desc: { ru: 'Proxmox, QEMU, VMware, VirtualBox, Hyper-V', en: 'Proxmox, QEMU, VMware, VirtualBox, Hyper-V' },
+		files: [
+			{ re: /x86-64-vm\.qcow2$/, name: { ru: 'Proxmox / QEMU / KVM (qcow2)', en: 'Proxmox / QEMU / KVM (qcow2)' } },
+			{ re: /x86-64-vm\.vmdk$/, name: { ru: 'VMware (vmdk)', en: 'VMware (vmdk)' } },
+			{ re: /x86-64-vm\.vdi$/, name: { ru: 'VirtualBox (vdi)', en: 'VirtualBox (vdi)' } },
+			{ re: /x86-64-vm\.vhdx$/, name: { ru: 'Hyper-V (vhdx)', en: 'Hyper-V (vhdx)' } },
+			{ re: /x86-64-vm\.img\.gz$/, name: { ru: 'Сырой образ (img.gz), sysupgrade', en: 'Raw image (img.gz), sysupgrade' } },
+			{ re: /x86-64-vm\.manifest$/, manifest: true },
+		],
+		tabs: {
+			'Proxmox': {
+				ru: [
+					'Скопируйте qcow2 на хост Proxmox и выполните команды (VMID 200, хранилище local-lvm, мост vmbr0 — поменяйте под себя).',
+					'Один сетевой адаптер: OpenWrt получит адрес по DHCP. Два: первый (net0) = LAN 192.168.1.1, второй (net1) = WAN.',
+				],
+				en: [
+					'Copy the qcow2 to the Proxmox host and run the commands (VMID 200, storage local-lvm, bridge vmbr0 — adjust).',
+					'One network adapter: OpenWrt gets its address by DHCP. Two: the first (net0) = LAN 192.168.1.1, the second (net1) = WAN.',
+				],
+				cmd: 'qm create 200 --name openwrt --memory 512 --cores 2 --net0 virtio,bridge=vmbr0 \\\n  --ostype l26 --scsihw virtio-scsi-single --serial0 socket --vga serial0\nqm importdisk 200 openwrt-*-x86-64-vm.qcow2 local-lvm\nqm set 200 --scsi0 local-lvm:vm-200-disk-0 --boot order=scsi0\nqm start 200',
+			},
+			'QEMU / KVM': {
+				ru: ['Запуск без Proxmox (консоль в терминале):'],
+				en: ['Without Proxmox (console in the terminal):'],
+				cmd: 'qemu-system-x86_64 -enable-kvm -m 512 -nographic \\\n  -drive file=openwrt-*-x86-64-vm.qcow2,if=virtio \\\n  -nic user,model=virtio-net-pci,hostfwd=tcp::8080-:80',
+			},
+			'VMware': {
+				ru: ['Новая ВМ: «Other Linux 5.x 64-bit», использовать существующий диск — файл vmdk. Сеть: VMXNET3 или E1000.'],
+				en: ['New VM: "Other Linux 5.x 64-bit", use an existing disk — the vmdk file. Network: VMXNET3 or E1000.'],
+			},
+			'VirtualBox': {
+				ru: ['Новая ВМ: Linux / Other Linux (64-bit), использовать существующий диск — файл vdi. Сеть: «Сетевой мост» или NAT, тип virtio-net или Intel PRO/1000.'],
+				en: ['New VM: Linux / Other Linux (64-bit), use an existing disk — the vdi file. Network: bridged or NAT, virtio-net or Intel PRO/1000.'],
+			},
+			'Hyper-V': {
+				ru: ['Новая ВМ поколения 2 (отключите Secure Boot) или поколения 1, диск — файл vhdx. Сетевой адаптер — обычный (не устаревший).'],
+				en: ['New generation 2 VM (disable Secure Boot) or generation 1, disk — the vhdx file. Network adapter — the normal one (not legacy).'],
+			},
+		},
+	},
+	{
+		id: 'i386-pc',
+		name: { ru: 'Старый ПК 32 бит', en: 'Old PC 32-bit' },
+		desc: { ru: 'Pentium 4 / Atom и новее (i686)', en: 'Pentium 4 / Atom and newer (i686)' },
+		files: [
+			{ re: /i386-pc-bios\.img\.gz$/, name: { ru: 'Образ (BIOS)', en: 'Image (BIOS)' } },
+			{ re: /i386-pc\.manifest$/, manifest: true },
+		],
+		tabs: {
+			'USB / HDD': {
+				ru: ['Запишите образ на диск и загрузитесь с него. Нужно от 256 МБ ОЗУ.'],
+				en: ['Write the image to a disk and boot from it. Needs 256 MB RAM or more.'],
+				cmd: 'gzip -dc openwrt-*-i386-pc-bios.img.gz | sudo dd of=/dev/sdX bs=1M conv=fsync',
+			},
+		},
+	},
+	{
+		id: 'i386-legacy',
+		name: { ru: 'Очень старый ПК', en: 'Very old PC' },
+		desc: { ru: 'i486 / Pentium / Pentium III', en: 'i486 / Pentium / Pentium III' },
+		files: [
+			{ re: /i386-legacy-bios\.img\.gz$/, name: { ru: 'Образ (BIOS)', en: 'Image (BIOS)' } },
+			{ re: /i386-legacy\.manifest$/, manifest: true },
+		],
+		tabs: {
+			'HDD / CF': {
+				ru: ['Запишите образ на диск или CompactFlash и загрузитесь с него. Без Docker, минимальный набор. Нужно от 128 МБ ОЗУ.'],
+				en: ['Write the image to a disk or CompactFlash and boot from it. No Docker, small package set. Needs 128 MB RAM or more.'],
+				cmd: 'gzip -dc openwrt-*-i386-legacy-bios.img.gz | sudo dd of=/dev/sdX bs=1M conv=fsync',
+			},
+		},
+	},
+];
+
+const state = { lang: 'ru', releases: [], rel: null, dev: null, tab: null, repo: '220242/khadas_edge-openwrt', error: null };
+
+function store(k, v) { try { localStorage.setItem('fw-' + k, v); } catch (e) {} }
+function load(k) { try { return localStorage.getItem('fw-' + k); } catch (e) { return null; } }
+function t(k) { return (T[state.lang] || T.ru)[k] || k; }
+function el(tag, attrs, ...kids) {
+	const e = document.createElement(tag);
+	for (const [k, v] of Object.entries(attrs || {})) {
+		if (k === 'html') e.innerHTML = v;
+		else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+		else e.setAttribute(k, v);
+	}
+	for (const c of kids.flat()) if (c != null) e.append(c);
+	return e;
+}
+function size(n) {
+	const u = ['B', 'KB', 'MB', 'GB'];
+	let i = 0;
+	while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+	return n.toFixed(i ? 1 : 0) + ' ' + u[i];
+}
+
+function renderStatic() {
+	document.documentElement.lang = state.lang;
+	document.querySelectorAll('[data-t]').forEach(n => { n.textContent = t(n.dataset.t); });
+	document.title = t('title');
+	document.getElementById('lang').textContent = state.lang === 'ru' ? 'EN' : 'RU';
+	const a = document.getElementById('repolink');
+	a.href = 'https://github.com/' + state.repo;
+	a.textContent = state.repo;
+}
+
+function renderReleases() {
+	const sel = document.getElementById('rel');
+	sel.innerHTML = '';
+	state.releases.forEach((r, i) => {
+		const tag = r.prerelease ? ' (' + t('pre') + ')' : (i === 0 ? ' (' + t('latest') + ')' : '');
+		sel.append(el('option', { value: String(r.id) }, (r.name || r.tag_name) + tag));
+	});
+	if (state.rel) sel.value = String(state.rel.id);
+	sel.disabled = !state.releases.length;
+}
+
+function renderDevices() {
+	const g = document.getElementById('devices');
+	g.innerHTML = '';
+	for (const d of DEVICES) {
+		g.append(el('button', {
+			class: 'dev', type: 'button', 'aria-pressed': String(state.dev === d.id),
+			onclick: () => { state.dev = d.id; state.tab = null; store('dev', d.id); render(); },
+		}, el('b', {}, d.name[state.lang]), el('span', {}, d.desc[state.lang])));
+	}
+}
+
+function renderOut() {
+	const out = document.getElementById('out');
+	out.innerHTML = '';
+	const d = DEVICES.find(x => x.id === state.dev);
+	if (!d) return;
+
+	const p = el('div', { class: 'panel' }, el('h2', {}, d.name[state.lang]), el('div', { class: 'note' }, d.desc[state.lang]));
+	const assets = state.rel ? state.rel.assets : [];
+
+	if (state.error) {
+		p.append(el('p', { class: 'warn' }, t('apierr') + ': ' + state.error));
+	} else if (!state.releases.length) {
+		p.append(el('p', { class: 'empty' }, state.loading ? t('loading') : t('norel')),
+			el('a', { href: 'https://github.com/' + state.repo + '/actions/workflows/build.yml' }, 'GitHub Actions'));
+	} else {
+		const list = el('div', { class: 'files' });
+		let found = 0;
+		for (const f of d.files) {
+			const a = assets.find(x => f.re.test(x.name));
+			if (!a) continue;
+			found++;
+			const digest = a.digest && a.digest.startsWith('sha256:') ? a.digest.slice(7) : null;
+			list.append(el('div', { class: 'file' },
+				el('div', { class: 'what' },
+					el('b', {}, f.manifest ? t('manifest') : f.name[state.lang]),
+					el('small', {}, a.name + ' · ' + size(a.size))),
+				el('a', { class: 'dl', href: a.browser_download_url }, t('download')),
+				digest ? el('div', { class: 'sha' }, t('sha') + ' ' + digest) : null));
+		}
+		if (!found) list.append(el('p', { class: 'empty' }, t('nofiles')));
+		p.append(list);
+		const sums = assets.find(x => x.name === 'SHA256SUMS');
+		if (sums) p.append(el('div', { class: 'note' }, el('a', { href: sums.browser_download_url }, 'SHA256SUMS')));
+	}
+
+	// installation tabs
+	const names = Object.keys(d.tabs);
+	if (!names.includes(state.tab)) state.tab = names[0];
+	p.append(el('h2', { style: 'margin-top:16px' }, t('install')));
+	const tabs = el('div', { class: 'tabs', role: 'tablist' });
+	for (const n of names) {
+		tabs.append(el('button', { type: 'button', role: 'tab', 'aria-selected': String(n === state.tab),
+			onclick: () => { state.tab = n; renderOut(); } }, n));
+	}
+	p.append(tabs);
+	const tab = d.tabs[state.tab];
+	p.append(el('ol', { class: 'steps' }, (tab[state.lang] || tab.ru).map(s => el('li', { html: s }))));
+	if (tab.cmd) p.append(el('pre', {}, tab.cmd));
+
+	p.append(el('h2', { style: 'margin-top:16px' }, t('first')), el('p', { class: 'note' }, t('firstText')));
+	out.append(p);
+}
+
+function render() { renderStatic(); renderReleases(); renderDevices(); renderOut(); }
+
+async function repoName() {
+	const q = new URLSearchParams(location.search).get('repo');
+	if (q && /^[\w.-]+\/[\w.-]+$/.test(q)) return q;
+	try {
+		const r = await fetch('config.json', { cache: 'no-store' });
+		if (r.ok) { const c = await r.json(); if (c.repo) return c.repo; }
+	} catch (e) {}
+	const m = location.hostname.match(/^([\w-]+)\.github\.io$/);
+	const seg = location.pathname.split('/').filter(Boolean)[0];
+	if (m && seg) return m[1] + '/' + seg;
+	return state.repo;
+}
+
+async function init() {
+	state.lang = load('lang') || ((navigator.language || '').startsWith('ru') ? 'ru' : 'en');
+	const theme = load('theme');
+	if (theme) document.documentElement.dataset.theme = theme;
+	state.dev = load('dev') || 'edge-v';
+	state.repo = await repoName();
+	state.loading = true;
+	render();
+
+	document.getElementById('lang').onclick = () => { state.lang = state.lang === 'ru' ? 'en' : 'ru'; store('lang', state.lang); render(); };
+	document.getElementById('theme').onclick = () => {
+		const cur = document.documentElement.dataset.theme ||
+			(matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+		const next = cur === 'dark' ? 'light' : 'dark';
+		document.documentElement.dataset.theme = next; store('theme', next);
+	};
+	document.getElementById('rel').onchange = e => {
+		state.rel = state.releases.find(r => String(r.id) === e.target.value); renderOut();
+	};
+
+	try {
+		const r = await fetch('https://api.github.com/repos/' + state.repo + '/releases?per_page=30',
+			{ headers: { Accept: 'application/vnd.github+json' } });
+		if (!r.ok) throw new Error('HTTP ' + r.status);
+		state.releases = (await r.json()).filter(x => !x.draft && x.assets.length);
+		state.rel = state.releases.find(x => !x.prerelease) || state.releases[0] || null;
+	} catch (e) {
+		state.error = e.message;
+	}
+	state.loading = false;
+	render();
+}
+init();
+</script>
+</body>
+</html>

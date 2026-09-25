@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    Сборка OpenWrt 25.12 для Khadas Edge-V на Windows 11.
+    Сборка OpenWrt 25.12 для Khadas Edge-V и x86 (ПК, виртуальные машины, 32 бит) на Windows 11.
 
 .DESCRIPTION
     Скрипт всё делает сам, всё хранится на диске D: (папка -Root):
@@ -20,6 +20,15 @@
 
 .PARAMETER Branch
     Ветка репозитория с проектом.
+
+.PARAMETER Targets
+    Что собирать, через запятую (по умолчанию edge-v):
+      edge-v       Khadas Edge-V (сборка из исходников, 1-4 часа)
+      x86-64-pc    ПК / сервер x86_64 (официальный ImageBuilder, минуты)
+      x86-64-vm    виртуальная машина: Proxmox qcow2, VMware vmdk, VirtualBox vdi, Hyper-V vhdx
+      i386-pc      32-битный ПК (Pentium 4 и новее)
+      i386-legacy  очень старый ПК (i486 / Pentium / Pentium III)
+      all          всё перечисленное
 
 .PARAMETER Jobs
     Число параллельных потоков сборки, 0 = автоматически по CPU и памяти.
@@ -42,6 +51,9 @@
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File .\build-khadas-edge.ps1 -Root E:\khadas -Jobs 8
+
+.EXAMPLE
+    powershell -ExecutionPolicy Bypass -File .\build-khadas-edge.ps1 -Targets x86-64-vm,x86-64-pc
 #>
 
 [CmdletBinding()]
@@ -49,7 +61,8 @@ param(
     [string]$Root = 'D:\KhadasEdgeBuild',
     [string]$Distro = 'khadas-build',
     [string]$Repo = 'https://github.com/220242/khadas_edge-openwrt.git',
-    [string]$Branch = 'claude/festive-pasteur-grk0sc',
+    [string]$Branch = 'nokvm',
+    [string]$Targets = 'edge-v',
     [int]$Jobs = 0,
     [switch]$ZtController,
     [switch]$Clean,
@@ -302,14 +315,14 @@ options = "uid=$B_UID,gid=$B_GID,umask=022"
 appendWindowsPath=false
 EOF
 
-MARK=/var/lib/khadas-build-deps-v1
+MARK=/var/lib/khadas-build-deps-v2
 if [ ! -f "$MARK" ]; then
 	apt-get update
 	apt-get install -y --no-install-recommends \
 		build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
 		gettext git libncurses-dev libssl-dev python3 python3-dev \
 		python3-setuptools python3-pyelftools rsync swig unzip zlib1g-dev \
-		file wget curl ca-certificates bzip2 zstd xz-utils patch perl \
+		file wget curl ca-certificates bzip2 zstd xz-utils patch perl qemu-utils \
 		diffutils time tar sudo
 	touch "$MARK"
 fi
@@ -325,6 +338,17 @@ $buildSh = @'
 # khadas-build: fetch the project and build OpenWrt (runs as the build user)
 set -eo pipefail
 REPO="$1"; BRANCH="$2"; JOBS="$3"; ZT="$4"; CLEAN="$5"; MODE="$6"; OUT="$7"; LOG="$8"
+TARGETS="${9:-edge-v}"
+[ "$TARGETS" = all ] && TARGETS=edge-v,x86-64-pc,x86-64-vm,i386-pc,i386-legacy
+EDGE=0
+X86=
+for t in ${TARGETS//,/ }; do
+	case "$t" in
+		edge-v) EDGE=1 ;;
+		x86-64-pc|x86-64-vm|i386-pc|i386-legacy) X86="$X86 $t" ;;
+		*) echo "ОШИБКА: неизвестная цель $t" >&2; exit 2 ;;
+	esac
+done
 
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 export LC_ALL=C.UTF-8
@@ -357,7 +381,20 @@ fi
 
 STEP=
 [ "$MODE" = prepare ] && STEP=prepare
-JOBS="$JOBS" ZT_CONTROLLER="$ZT" OUT="$OUT" ./openwrt/build.sh $STEP 2>&1 | tee "$LOG"
+{
+	if [ "$EDGE" = 1 ]; then
+		echo "==> Khadas Edge-V"
+		JOBS="$JOBS" ZT_CONTROLLER="$ZT" OUT="$OUT" ./openwrt/build.sh $STEP
+	fi
+	if [ -n "$X86" ] && [ "$MODE" != prepare ]; then
+		echo "==> пакеты для x86 (официальный SDK)"
+		FEED_OUT="$OUT/feed" ./openwrt/ib/sdk-feed.sh
+		for v in $X86; do
+			echo "==> $v (официальный ImageBuilder)"
+			FEED_OUT="$OUT/feed" OUT="$OUT" ./openwrt/ib/imagebuilder.sh "$v"
+		done
+	fi
+} 2>&1 | tee "$LOG"
 '@
 
 Write-LinuxFile "$Root\scripts\setup-root.sh" $setupSh
@@ -394,7 +431,7 @@ Say "Лог: $logWin"
 Set-KeepAwake $true
 $started = Get-Date
 $code = Invoke-InDistro $BuildUser @('bash', "$wslRoot/scripts/build.sh",
-    $Repo, $Branch, "$Jobs", $zt, $cleanArg, $mode, "$wslRoot/out", (ConvertTo-WslPath $logWin))
+    $Repo, $Branch, "$Jobs", $zt, $cleanArg, $mode, "$wslRoot/out", (ConvertTo-WslPath $logWin), $Targets)
 Set-KeepAwake $false
 $elapsed = (Get-Date) - $started
 
@@ -410,10 +447,12 @@ if ($NoBuild) {
 
 Write-Host ''
 Say ('Сборка завершена за {0:hh\:mm\:ss}. Образы:' -f $elapsed)
-Get-ChildItem "$Root\out" -Filter '*.img.gz' | Sort-Object LastWriteTime -Descending |
+Get-ChildItem "$Root\out" -Recurse -Include '*.img.gz', '*.qcow2', '*.vmdk', '*.vdi', '*.vhdx' |
+    Where-Object { $_.FullName -notmatch '\\apk-repo\\' } | Sort-Object FullName |
     ForEach-Object { Write-Host ("    {0}  ({1:N0} МБ)" -f $_.FullName, ($_.Length / 1MB)) -ForegroundColor Green }
 Write-Host ''
-Write-Host '  Запись на SD / eMMC: balenaEtcher или Rufus (файл .img.gz можно записывать без распаковки).'
+Write-Host '  Запись на SD / eMMC / USB: balenaEtcher или Rufus (файл .img.gz можно записывать без распаковки).'
+Write-Host '  Proxmox: qm importdisk <vmid> openwrt-...-x86-64-vm.qcow2 local-lvm (подробнее: selector\index.html).'
 Write-Host '  Ethernet - к домашнему роутеру: плата появится в нём как khadas-edge, адрес виден и на HDMI.'
 Write-Host '  Веб-интерфейс: http://khadas-edge.local/ или по этому адресу, root / khadasedge (смените пароль).'
 Write-Host '  Wi-Fi Khadas-Edge / khadasedge, из Wi-Fi: http://192.168.77.1'

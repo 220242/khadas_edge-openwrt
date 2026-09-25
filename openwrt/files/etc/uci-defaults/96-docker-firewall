@@ -1,0 +1,31 @@
+#!/bin/sh
+# Docker with fw4: the docker zone (created the same way by dockerd on its
+# first start) needs forwardings, else containers have no Internet and the
+# LAN can not reach them. dockerd's own "block wan" iptables rule also
+# rejects the replies to containers on the uplink; fw4 already keeps the
+# Internet away from published ports (no DNAT accept on wan).
+# Once per install, settings kept over sysupgrade are not touched.
+
+[ -f /etc/config/dockerd ] || exit 0
+[ -z "$(uci -q get firewall.khadas_docker_wan)" ] || exit 0
+[ -n "$(uci -q get firewall.@zone[1])" ] || exit 0
+
+uci -q batch <<-EOF
+	set firewall.docker=zone
+	set firewall.docker.name='docker'
+	set firewall.docker.input='ACCEPT'
+	set firewall.docker.output='ACCEPT'
+	set firewall.docker.forward='ACCEPT'
+	del_list firewall.docker.network='docker'
+	add_list firewall.docker.network='docker'
+	set firewall.khadas_docker_wan=forwarding
+	set firewall.khadas_docker_wan.src='docker'
+	set firewall.khadas_docker_wan.dest='wan'
+	set firewall.khadas_lan_docker=forwarding
+	set firewall.khadas_lan_docker.src='lan'
+	set firewall.khadas_lan_docker.dest='docker'
+	del_list dockerd.firewall.blocked_interfaces='wan'
+EOF
+uci commit firewall
+uci commit dockerd
+exit 0

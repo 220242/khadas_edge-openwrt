@@ -1,0 +1,5 @@
+# virtual machines (Proxmox / QEMU / KVM, VMware, Hyper-V, VirtualBox):
+# virtio, vmxnet3, Hyper-V drivers are in the x86_64 kernel
+qemu-ga
+?open-vm-tools
+?kmod-e1000

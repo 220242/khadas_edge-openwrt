@@ -7,8 +7,9 @@ CONFIG_TARGET_rockchip_armv8=y
 CONFIG_TARGET_rockchip_armv8_DEVICE_khadas_edge-v=y
 
 ## every kernel module is built and published as an apk repository with
-## the image (the kernel has KVM and USB storage built in, kmods from
-## downloads.openwrt.org do not match it)
+## the image (USB storage / UAS built in for the root on a USB SSD and the
+## HDMI driver change the kernel, kmods from downloads.openwrt.org do not
+## match it)
 CONFIG_ALL_KMODS=y
 
 ## HDMI console (U-Boot + kernel), login with a USB keyboard
@@ -17,7 +18,7 @@ CONFIG_PACKAGE_khadas-edge-console=y
 
 ## http://khadas-edge.local/
 CONFIG_PACKAGE_umdns=y
-# room for docker images / VM disks on the internal storage
+# room for docker images on the internal storage
 CONFIG_TARGET_ROOTFS_PARTSIZE=2048
 
 ## kernel features for containers
@@ -126,13 +127,7 @@ CONFIG_PACKAGE_kmod-ikconfig=y
 CONFIG_PACKAGE_zerotier=y
 CONFIG_PACKAGE_luci-app-zt-gateway=y
 
-## virtual machines: KVM / QEMU
-CONFIG_PACKAGE_luci-app-kvm=y
-CONFIG_PACKAGE_qemu-aarch64-softmmu=y
-CONFIG_PACKAGE_qemu-img=y
-CONFIG_PACKAGE_kmod-vhost-net=y
 CONFIG_PACKAGE_kmod-tun=y
-CONFIG_PACKAGE_taskset=y
 
 ## board
 CONFIG_PACKAGE_kmod-hwmon-pwmfan=y

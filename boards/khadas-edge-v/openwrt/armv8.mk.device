@@ -1,0 +1,15 @@
+# target/linux/rockchip/image/armv8.mk: the Edge-V device
+define Device/khadas_edge-v
+  $(Device/rk3399)
+  DEVICE_VENDOR := Khadas
+  DEVICE_MODEL := Edge-V
+  DEVICE_DTS := rk3399-khadas-edge-v
+  UBOOT_DEVICE_NAME := khadas-edge-v-rk3399
+  BOOT_SCRIPT := khadas-edge-v
+  # onboard AP6356S needs the Khadas BCM4356A2 firmware (khadas feed),
+  # OpenWrt cypress-firmware-4356-sdio is built for BCM4356A3
+  DEVICE_PACKAGES := kmod-brcmfmac khadas-edge-wifi-firmware \
+	khadas-wifi-autoconf kmod-hwmon-pwmfan khadas-edge-console
+endef
+TARGET_DEVICES += khadas_edge-v
+

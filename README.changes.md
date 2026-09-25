@@ -1,5 +1,20 @@
 # OpenWrt Khadas Change log
 
+## nokvm: Edge-V + x86, firmware selector
+
++ branch `nokvm`: no KVM in the Edge-V kernel, no QEMU / `luci-app-kvm` (virtual machines belong
+  to Proxmox); USB UAS stays built in (root on a USB SSD)
++ x86 images with the official ImageBuilder (official kernel, kmods from downloads.openwrt.org):
+  `x86-64-pc` (UEFI + BIOS; Wi-Fi, modems, Docker, NICs), `x86-64-vm` (qcow2 / vmdk / vdi / vhdx / img.gz,
+  qemu-ga), `i386-pc` (Pentium 4+), `i386-legacy` (i486 / Pentium); own LuCI apps built with the
+  official SDK (`openwrt/ib`), parallel CI jobs, one release per `v*` tag
++ firmware selector (`selector/`, GitHub Pages): device → images of a release, SHA256, install steps
+  (Proxmox / QEMU / VMware / VirtualBox / Hyper-V)
++ `boards/khadas-edge-v`: dts, dtb, U-Boot (HDMI) binaries + config, boot script, Wi-Fi firmware
++ Docker firewall defaults (`96-docker-firewall`) for every image; one network port = DHCP uplink
+  also on x86 (VMs)
++ Windows script: `-Targets` (edge-v, x86-64-pc, x86-64-vm, i386-pc, i386-legacy, all)
+
 ## Edge-V: first boot, HDMI, kmods
 
 + only Khadas Edge-V is built (Edge / Edge-Captain profiles removed)

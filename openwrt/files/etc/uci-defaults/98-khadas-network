@@ -6,8 +6,11 @@
 # Here the port is the uplink: DHCP client, the board appears in the router
 # as "khadas-edge". LAN is the Wi-Fi access point bridge 192.168.77.1/24
 # (routed + NAT, no clash with the usual home subnets). The web interface,
-# SSH, Docker apps and VMs are reachable from private networks on the
+# SSH and Docker apps are reachable from private networks on the
 # uplink side (home network), not from the Internet.
+#
+# The same applies to x86 images on a machine / VM with a single network
+# port (OpenWrt makes eth0 the LAN, eth1 the WAN when there are two).
 #
 # Only a freshly generated network config is changed, settings kept over
 # sysupgrade stay as they are.
@@ -63,32 +66,6 @@ uci -q batch <<-EOF
 	set firewall.khadas_home_fwd.proto='all'
 	set firewall.khadas_home_fwd.target='ACCEPT'
 EOF
-
-# Docker with fw4: the docker zone (created the same way by dockerd on its
-# first start) needs forwardings, else containers have no Internet and the
-# Wi-Fi LAN can not reach them. dockerd's own "block wan" iptables rule
-# also rejects the replies to containers on the uplink; fw4 already keeps
-# the Internet away from published ports (no DNAT accept on wan), the
-# home network is allowed above.
-if [ -f /etc/config/dockerd ]; then
-	uci -q batch <<-EOF
-		set firewall.docker=zone
-		set firewall.docker.name='docker'
-		set firewall.docker.input='ACCEPT'
-		set firewall.docker.output='ACCEPT'
-		set firewall.docker.forward='ACCEPT'
-		del_list firewall.docker.network='docker'
-		add_list firewall.docker.network='docker'
-		set firewall.khadas_docker_wan=forwarding
-		set firewall.khadas_docker_wan.src='docker'
-		set firewall.khadas_docker_wan.dest='wan'
-		set firewall.khadas_lan_docker=forwarding
-		set firewall.khadas_lan_docker.src='lan'
-		set firewall.khadas_lan_docker.dest='docker'
-		del_list dockerd.firewall.blocked_interfaces='wan'
-	EOF
-	uci commit dockerd
-fi
 
 # mDNS: http://khadas-edge.local/ from the home network too
 if [ -f /etc/config/umdns ]; then

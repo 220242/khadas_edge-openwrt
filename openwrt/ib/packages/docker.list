@@ -1,0 +1,12 @@
+# containers: Docker + one click apps (Services -> Docker Apps)
+dockerd
+docker
+docker-compose
+luci-app-dockerman
+luci-app-docker-apps
+iptables-nft
+ip6tables-nft
+kmod-veth
+kmod-br-netfilter
+?kmod-ikconfig
+tar

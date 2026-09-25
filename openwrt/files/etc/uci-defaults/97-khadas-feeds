@@ -1,7 +1,7 @@
 #!/bin/sh
-# Package feeds. The kernel is built with KVM and USB storage for the root
-# file system on a USB SSD, kmods from downloads.openwrt.org do not match
-# it. Kmods (and the target packages) come from the apk repository built
+# Package feeds. The kernel is built with USB UAS for the root file system
+# on a USB SSD and the HDMI driver, kmods from downloads.openwrt.org do not
+# match it. Kmods (and the target packages) come from the apk repository built
 # together with this image (/etc/khadas-apk-repo), the khadas feed too.
 # Other feeds (base, packages, luci, ...) stay on downloads.openwrt.org.
 

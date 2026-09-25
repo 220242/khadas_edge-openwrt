@@ -1,0 +1,22 @@
+# every x86 image. "name" required, "?name" optional (skipped with a
+# warning when the target has no such package), "-name" removed
+luci
+luci-ssl
+luci-app-ttyd
+umdns
+htop
+nano
+curl
+ca-bundle
+block-mount
+e2fsprogs
+fdisk
+lsblk
+kmod-usb-storage-uas
+kmod-fs-ext4
+?kmod-fs-exfat
+?kmod-fs-ntfs3
+# ZeroTier internet gateway (Services -> ZeroTier Gateway)
+zerotier
+luci-app-zt-gateway
+?luci-proto-wireguard

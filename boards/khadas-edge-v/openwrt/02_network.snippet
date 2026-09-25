@@ -1,0 +1,5 @@
+# target/linux/rockchip/armv8/base-files/etc/board.d/02_network (rockchip_setup_macs)
+	khadas,edge-v)
+		# eMMC (mmc2) CID: stable, unlike the SD card
+		lan_mac=$(macaddr_generate_from_mmc_cid mmcblk2)
+		;;

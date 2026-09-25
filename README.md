@@ -1,6 +1,14 @@
 # khadas edge openwrt
 
-OpenWrt 25.12 for **Khadas Edge-V** https://docs.khadas.com/edge/ (RockChip RK3399, VIM form factor).
+OpenWrt 25.12 for **Khadas Edge-V** https://docs.khadas.com/edge/ (RockChip RK3399, VIM form factor),
+**x86_64** PCs, **virtual machines** (Proxmox, QEMU, VMware, VirtualBox, Hyper-V) and **32-bit** PCs.
+
+Branch `nokvm`: no KVM / QEMU virtual machine manager on the board (VMs belong to Proxmox),
+x86 images with the official OpenWrt kernel.
+
+**Firmware selector**: [selector/](selector/index.html) - on GitHub Pages
+(`https://<owner>.github.io/<repo>/`, Settings → Pages → Source: GitHub Actions), lists the
+images of the GitHub releases per device with install instructions.
 
 ![khadas vims openwrt](pics/khadas_vim_openwrt.jpg)
 
@@ -11,7 +19,8 @@ OpenWrt 25.12 for **Khadas Edge-V** https://docs.khadas.com/edge/ (RockChip RK33
 ## What's inside
 
 Full OpenWrt source build (`rockchip/armv8` target, Linux 6.12, mainline U-Boot + TF-A),
-Khadas Edge-V added as an OpenWrt device, kernel built with **KVM**.
+Khadas Edge-V added as an OpenWrt device. Board specific files (dtb, dts, U-Boot, Wi-Fi firmware):
+[boards/khadas-edge-v](boards/khadas-edge-v).
 
 + **Plug and play**: Ethernet is the uplink (DHCP), the board shows up in the home router as
   `khadas-edge`; web interface, SSH, Docker apps from the home network; HDMI console
@@ -30,9 +39,6 @@ Khadas Edge-V added as an OpenWrt device, kernel built with **KVM**.
   + QMI / MBIM / NCM / RNDIS / serial, `uqmi`, `umbim`, `qmicli`, `mbimcli`, `sms-tool`
 + **ZeroTier internet gateway** - `Services → ZeroTier Gateway`: ZeroTier clients get
   internet access through this device (exit node), see [ZeroTier gateway](#zerotier-gateway)
-+ **Virtual machines (KVM / QEMU)** - `Services → Virtual Machines`
-  + arm64 guests with UEFI (Debian, Ubuntu, Alpine, OpenWrt ...), install from ISO
-  + virtio disk / network (bridged to `br-lan`), VNC screen, autostart
 + **Kernel modules from the package manager**: every kmod of this kernel is built and published with
   the image, `apk add kmod-…` works, see [Packages](#packages-and-kernel-modules)
 + **Containers**
@@ -47,10 +53,25 @@ Khadas Edge-V added as an OpenWrt device, kernel built with **KVM**.
 
 ## Images
 
-GitHub Actions builds the image on every push (Actions → build → artifacts) and
-publishes a release for `v*` tags:
+GitHub Actions builds on every push (Actions → build → artifacts), a `v*` tag makes a release
+with all images (the firmware selector reads the releases):
 
-+ `openwrt-25.12.5-rockchip-armv8-khadas_edge-v-squashfs-sysupgrade.img.gz`
+| device | file | build |
+|---|---|---|
+| Khadas Edge-V | `openwrt-25.12.5-rockchip-armv8-khadas_edge-v-squashfs-sysupgrade.img.gz` | source build, ~2 h |
+| PC / server x86_64 | `openwrt-25.12.5-x86-64-pc-efi.img.gz` (UEFI + BIOS), `…-pc-bios.img.gz` | ImageBuilder, ~15 min |
+| virtual machine x86_64 | `openwrt-25.12.5-x86-64-vm.qcow2` (Proxmox / QEMU), `.vmdk` (VMware), `.vdi` (VirtualBox), `.vhdx` (Hyper-V), `.img.gz` | ImageBuilder |
+| 32-bit PC, Pentium 4 and newer | `openwrt-25.12.5-i386-pc-bios.img.gz` | ImageBuilder |
+| very old PC, i486 / Pentium / Pentium III | `openwrt-25.12.5-i386-legacy-bios.img.gz` | ImageBuilder |
+
+The jobs run in parallel. x86 images: official OpenWrt kernel (kmods from downloads.openwrt.org work),
+package sets in [openwrt/ib/packages](openwrt/ib/packages):
+
++ `x86-64-pc`: Wi-Fi AX / BE cards with access point autoconfig, 4G / 5G modems, Docker + one click
+  apps, ZeroTier gateway, 2.5G / 10G network cards
++ `x86-64-vm`: Docker + apps, ZeroTier gateway, `qemu-ga` (virtio / vmxnet3 / Hyper-V drivers are in the kernel)
++ `i386-pc`: Wi-Fi, modems, ZeroTier (no Docker), `i386-legacy`: small set for old hardware
++ one network port (typical VM): DHCP uplink like the Edge-V; two or more: `eth0` LAN 192.168.1.1, `eth1` WAN
 
 ## Build
 
@@ -67,10 +88,12 @@ cd khadas_edge-openwrt
 OW_REL=v25.12.5 JOBS=8 ./openwrt/build.sh
 ```
 
-+ [openwrt/patches](openwrt/patches) - Khadas Edge-V device (U-Boot with HDMI), KVM kernel config, QEMU for rockchip
++ [openwrt/patches](openwrt/patches) - Khadas Edge-V device (U-Boot with HDMI), USB UAS built in
++ [openwrt/ib](openwrt/ib) - x86 images: `sdk-feed.sh` (own packages with the official SDK),
+  `imagebuilder.sh x86-64-pc|x86-64-vm|i386-pc|i386-legacy`
 + [openwrt/diffconfig](openwrt/diffconfig) - package selection
 + [openwrt/feed](openwrt/feed) - own packages:
-  `luci-app-kvm` (VM manager), `luci-app-zt-gateway` (ZeroTier gateway), `luci-app-docker-apps`
+  `luci-app-zt-gateway` (ZeroTier gateway), `luci-app-docker-apps`
   (one click Docker apps), `khadas-storage` + `luci-app-khadas-storage` (install to disk, expand root),
   `khadas-wifi-autoconf` (Wi-Fi AP setup), `khadas-edge-wifi-firmware` (AP6356S firmware),
   `khadas-edge-display` (HDMI console: `kmod-drm-rockchip`, `khadas-edge-console`)
@@ -86,13 +109,14 @@ builds. Images: `D:\KhadasEdgeBuild\out`, logs: `D:\KhadasEdgeBuild\logs`. Needs
 PowerShell:
 
 ```
-iwr https://raw.githubusercontent.com/220242/khadas_edge-openwrt/claude/festive-pasteur-grk0sc/windows/build-khadas-edge.ps1 -OutFile D:\build-khadas-edge.ps1
+iwr https://raw.githubusercontent.com/220242/khadas_edge-openwrt/nokvm/windows/build-khadas-edge.ps1 -OutFile D:\build-khadas-edge.ps1
 powershell -ExecutionPolicy Bypass -File D:\build-khadas-edge.ps1
 ```
 
 or double click `windows\build-khadas-edge.cmd` in a checkout. Options: `-Root E:\dir`, `-Jobs 8`,
 `-Clean`, `-NoBuild` (only prepare, then `make menuconfig` in `\\wsl$\khadas-build\home\builder\khadas_edge-openwrt\build\openwrt`),
-`-ZtController`, `-Uninstall`. Running it again updates the project and rebuilds only what changed.
+`-ZtController`, `-Uninstall`, `-Targets edge-v,x86-64-pc,x86-64-vm,i386-pc,i386-legacy` (or `all`;
+x86 targets take minutes: official SDK + ImageBuilder). Running it again updates the project and rebuilds only what changed.
 
 ## Installation
 
@@ -129,9 +153,9 @@ is ignored while the eMMC still has its boot loader.
 + normal packages (`apk add …`, `System → Software`) come from downloads.openwrt.org
   (25.12.5, `aarch64_generic`): same release and ABI as this image
 + **kernel modules can not** come from there: official kmods are built for the official
-  kernel (`kernel=6.12.94~<hash>`); this kernel has KVM and USB storage / UAS / NVMe built in
-  (root on USB SSD), so its hash differs and apk refuses them (loading them anyway would crash:
-  KVM changes kernel structures)
+  kernel (`kernel=6.12.94~<hash>`); the Edge-V kernel has USB UAS built in (root on a USB SSD)
+  and the HDMI driver, so its hash differs and apk refuses them. The x86 images use the official
+  kernel: there `apk add kmod-…` works from downloads.openwrt.org
 + so the build makes **every kmod** (`CONFIG_ALL_KMODS`) for this kernel. Release (`v*` tag) and
   manual (Run workflow) builds publish them as an apk repository in the branch `apk-<run id>-<attempt>`
   (`targets/` kmods, `khadas/` own packages) and the image uses it
@@ -140,20 +164,6 @@ is ignored while the eMMC still has its boot loader.
 + other builds (and local builds) have that feed disabled; their kmods are in
   `out/apk-repo` (`apk add --allow-untrusted ./kmod-….apk`)
 + old `apk-*` branches are not deleted automatically, remove them in GitHub when not needed
-
-## Virtual machines quick start
-
-```
-# storage for VMs, e.g. a USB SSD / NVMe
-mkfs.ext4 /dev/nvme0n1 && mkdir -p /mnt/vm && mount /dev/nvme0n1 /mnt/vm
-cd /mnt/vm && wget https://cdimage.debian.org/debian-cd/current/arm64/iso-cd/debian-13.1.0-arm64-netinst.iso
-```
-
-`Services → Virtual Machines`: add VM, set disk `/mnt/vm/debian.qcow2`, disk size `16G`,
-CD image, VNC display `0`, enable `Run`, `Save & Apply`, connect VNC client to `<board address>:5900`.
-
-RK3399 is big.LITTLE (4x Cortex-A53 + 2x Cortex-A72): KVM vCPUs are pinned to one
-core type with `CPU affinity` (default `4-5`, A72).
 
 ## Storage: USB SSD, NVMe
 
@@ -169,7 +179,7 @@ core type with `CPU affinity` (default `4-5`, A72).
   Typical setup: flash the image to the SD card or eMMC, boot, install to the USB SSD with
   "Boot from this disk", reboot. The kernel has USB storage, UAS and NVMe built in (root on USB / NVMe).
 + **Expand root to the whole disk**: grows the root partition, the overlay filesystem (f2fs / ext4) is
-  resized on the next boot before it is mounted. Docker images and VM disks can use the whole disk.
+  resized on the next boot before it is mounted. Docker images can use the whole disk.
 
 ## Docker apps
 
@@ -227,7 +237,7 @@ The device NATs ZeroTier clients to its internet uplink (`wan`: Ethernet, 5G mod
 ## Legacy build
 
 `scripts/build` - old repack build (Khadas 5.14 kernel + OpenWrt armsr userspace),
-no AX / BE Wi-Fi drivers and no KVM in that kernel.
+no AX / BE Wi-Fi drivers in that kernel.
 
 ## related projects
 
