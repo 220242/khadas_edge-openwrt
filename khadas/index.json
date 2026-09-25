@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "architecture": "aarch64_generic",
+  "packages": {
+    "khadas-edge-console": "1",
+    "khadas-edge-wifi-firmware": "2026.06.23-r1",
+    "khadas-storage": "1-r1",
+    "khadas-wifi-autoconf": "1-r1",
+    "luci-app-docker-apps": "26.268.08507~93d4aef",
+    "luci-app-khadas-storage": "26.268.08507~93d4aef",
+    "luci-app-kvm": "26.268.08507~93d4aef",
+    "luci-app-zt-gateway": "26.268.08507~93d4aef"
+  }
+}
