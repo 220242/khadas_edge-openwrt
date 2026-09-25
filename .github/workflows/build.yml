@@ -13,6 +13,10 @@ on:
         description: 'Add ZeroTier network controller (non-commercial license, private use only, not released)'
         type: boolean
         default: false
+      publish_kmods:
+        description: 'Publish the kmod apk repository (new branch apk-<run id>) for this image'
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -25,6 +29,11 @@ jobs:
       OW_REL: v25.12.5
       SRC: /mnt/build/openwrt
       ZT_CONTROLLER: ${{ inputs.zerotier_controller && '1' || '0' }}
+      # apk repository (all kmods + khadas feed) matching the image kernel:
+      # tag builds and manual runs publish it as a new branch, served by
+      # raw.githubusercontent.com; other builds leave the kmod feed disabled
+      APK_BRANCH: apk-${{ github.run_id }}-${{ github.run_attempt }}
+      APK_REPO_URL: ${{ (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_kmods)) && format('https://raw.githubusercontent.com/{0}/apk-{1}-{2}', github.repository, github.run_id, github.run_attempt) || '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -63,11 +72,38 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: openwrt-${{ env.OW_REL }}-khadas-edge${{ env.ZT_CONTROLLER == '1' && '-zt-controller' || '' }}
-          path: out/
+          name: openwrt-${{ env.OW_REL }}-khadas-edge-v${{ env.ZT_CONTROLLER == '1' && '-zt-controller' || '' }}
+          path: |
+            out/*.img.gz
+            out/sha256sums
+            out/*.manifest
+
+      - name: publish apk repository
+        if: env.APK_REPO_URL != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          cd out/apk-repo
+          cat > README.md <<EOF
+          apk repository for the Khadas Edge-V OpenWrt image built from
+          ${GITHUB_SHA} (run ${GITHUB_RUN_ID}): every kernel module of that
+          kernel (targets/) and the khadas feed (khadas/).
+          The image uses it through /etc/apk/repositories.d/distfeeds.list.
+          EOF
+          git init -q -b "$APK_BRANCH"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "apk repository for ${GITHUB_SHA} (run ${GITHUB_RUN_ID})"
+          git push -q "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/$APK_BRANCH"
+          echo "published $APK_REPO_URL"
 
       - name: release
         if: startsWith(github.ref, 'refs/tags/v') && env.ZT_CONTROLLER != '1'
         uses: softprops/action-gh-release@v2
         with:
-          files: out/*
+          files: |
+            out/*.img.gz
+            out/sha256sums
+            out/*.manifest

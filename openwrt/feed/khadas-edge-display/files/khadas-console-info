@@ -1,0 +1,24 @@
+#!/bin/sh
+# print how to reach the device on the HDMI screen (tty1)
+
+[ -c /dev/tty1 ] || exit 0
+
+. /lib/functions/network.sh
+. /etc/openwrt_release
+
+{
+	printf '\n\033[1;32m%s\033[0m  %s\n' \
+		"$(uci -q get system.@system[0].hostname)" "$DISTRIB_DESCRIPTION"
+	for iface in wan lan; do
+		network_get_ipaddr ip "$iface" || continue
+		[ -n "$ip" ] && printf '  %-4s %-15s  web: http://%s/\n' "$iface" "$ip" "$ip"
+	done
+	for s in $(uci -q show wireless | sed -n 's/^wireless\.\([^.]*\)\.ssid=.*/\1/p'); do
+		radio="$(uci -q get "wireless.$s.device")"
+		[ "$(uci -q get "wireless.$s.disabled")" = 1 ] && continue
+		[ "$(uci -q get "wireless.$radio.disabled")" = 1 ] && continue
+		printf '  Wi-Fi %s (%s)\n' "$(uci -q get "wireless.$s.ssid")" "$radio"
+	done
+	printf '  press Enter for a shell\n'
+} > /dev/tty1 2>/dev/null
+exit 0

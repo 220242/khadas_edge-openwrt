@@ -1,0 +1,5 @@
+# show the addresses on the HDMI console when the uplink or LAN comes up
+[ "$ACTION" = ifup ] || exit 0
+case "$INTERFACE" in
+	wan|lan) /usr/libexec/khadas-console-info ;;
+esac

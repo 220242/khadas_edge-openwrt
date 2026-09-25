@@ -1,6 +1,6 @@
 #!/bin/bash
 
-## OpenWrt 25.12 source build for Khadas Edge / Edge-V / Edge-Captain (RK3399)
+## OpenWrt 25.12 source build for Khadas Edge-V (RK3399)
 ##
 ## USAGE
 ##   ./openwrt/build.sh            # prepare + download + build
@@ -11,7 +11,11 @@
 ##   OW_REL=v25.12.5   OpenWrt release tag
 ##   SRC=build/openwrt OpenWrt source tree
 ##   JOBS=$(nproc)
-##   OUT=out           images output directory
+##   OUT=out           images output directory, the apk repository (every
+##                     kmod + the khadas feed) goes to $OUT/apk-repo
+##   APK_REPO_URL=     where $OUT/apk-repo gets published (https, apk
+##                     repository root); the image then installs kmods from
+##                     there, empty: the kmod / khadas feeds are disabled
 ##   ZT_CONTROLLER=1   add the ZeroTier network controller (ZeroTier
 ##                     Source-Available License: non-commercial use only,
 ##                     do not distribute such images)
@@ -83,6 +87,10 @@ log "feeds install"
 ## files overlay
 rm -rf "$SRC/files"
 cp -a "$TOP/files" "$SRC/files"
+if [ -n "${APK_REPO_URL:-}" ]; then
+	log "kmod repository: $APK_REPO_URL"
+	echo "${APK_REPO_URL%/}" > "$SRC/files/etc/khadas-apk-repo"
+fi
 
 ## config
 cp "$TOP/diffconfig" .config
@@ -115,12 +123,34 @@ make download -j8 || make download -j1 V=s
 [ "$STEP" = "download" ] && exit 0
 
 log "build with $JOBS jobs"
-make -j"$JOBS" || make -j1 V=s
+# IGNORE_ERRORS=m: a kmod that fails to build is only missing from the apk
+# repository (as on the OpenWrt buildbot), the image packages (=y) must build
+make -j"$JOBS" IGNORE_ERRORS=m || make -j1 V=s IGNORE_ERRORS=m
 
 mkdir -p "$OUT"
 cp -v bin/targets/rockchip/armv8/*khadas*.img.gz "$OUT"/
 cp -v bin/targets/rockchip/armv8/sha256sums "$OUT"/ 2>/dev/null || true
 cp -v bin/targets/rockchip/armv8/*.manifest "$OUT"/ 2>/dev/null || true
+
+# apk repository matching this kernel: kmods + target packages, khadas feed
+REPO="$OUT/apk-repo"
+rm -rf "$REPO"
+mkdir -p "$REPO/targets" "$REPO/khadas"
+cp -a bin/targets/rockchip/armv8/packages/. "$REPO/targets/"
+cp -a bin/packages/*/khadas/. "$REPO/khadas/"
+# kmods of the other feeds belong to this kernel too (the buildbot moves
+# them into its kmods feed), index + sign again like package/index
+find bin/packages -name 'kmod-*.apk' ! -path '*/khadas/*' -exec cp -a {} "$REPO/targets/" \;
+TOPDIR=$(pwd)
+(
+	cd "$REPO/targets"
+	rm -f packages.adb index.json
+	"$TOPDIR/staging_dir/host/bin/apk" mkndx --root "$TOPDIR" --keys-dir "$TOPDIR" \
+		--allow-untrusted --sign "$TOPDIR/private-key.pem" --output packages.adb *.apk
+)
+[ -f "$REPO/targets/packages.adb" ] || die "no packages.adb in $REPO/targets"
+[ -f "$REPO/khadas/packages.adb" ] || die "no packages.adb in $REPO/khadas"
+log "apk repository: $REPO ($(find "$REPO" -name '*.apk' | wc -l) packages, $(du -sh "$REPO" | cut -f1))"
 
 log "DONE: $OUT"
 ls -l "$OUT"

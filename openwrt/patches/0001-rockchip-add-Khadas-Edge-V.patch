@@ -1,0 +1,121 @@
+diff --git a/package/boot/uboot-rockchip/Makefile b/package/boot/uboot-rockchip/Makefile
+index cfe3907..081d0db 100644
+--- a/package/boot/uboot-rockchip/Makefile
++++ b/package/boot/uboot-rockchip/Makefile
+@@ -121,6 +121,13 @@ define U-Boot/rk3399/Default
+   ATF:=rk3399_bl31.elf
+ endef
+ 
++define U-Boot/khadas-edge-v-rk3399
++  $(U-Boot/rk3399/Default)
++  NAME:=Khadas Edge-V
++  BUILD_DEVICES:= \
++    khadas_edge-v
++endef
++
+ define U-Boot/nanopc-t4-rk3399
+   $(U-Boot/rk3399/Default)
+   NAME:=NanoPC T4
+@@ -411,6 +418,7 @@ define U-Boot/rock-5c-rk3588s
+ endef
+ 
+ UBOOT_TARGETS := \
++  khadas-edge-v-rk3399 \
+   nanopc-t4-rk3399 \
+   nanopi-r4s-rk3399 \
+   rock-4c-plus-rk3399 \
+diff --git a/package/boot/uboot-rockchip/patches/301-khadas-edge-v-enable-HDMI.patch b/package/boot/uboot-rockchip/patches/301-khadas-edge-v-enable-HDMI.patch
+new file mode 100644
+index 0000000..b6acaee
+--- /dev/null
++++ b/package/boot/uboot-rockchip/patches/301-khadas-edge-v-enable-HDMI.patch
+@@ -0,0 +1,19 @@
++From: khadas_edge-openwrt
++Subject: [PATCH] rockchip: khadas-edge-v: enable HDMI output
++
++The boot loader shows up on HDMI (stdout=serial,vidconsole is set by
++evb_rk3399.h), like on the other RK3399 boards with HDMI.
++
++diff --git a/configs/khadas-edge-v-rk3399_defconfig b/configs/khadas-edge-v-rk3399_defconfig
++index 3903c4e2..fd5df49e 100644
++--- a/configs/khadas-edge-v-rk3399_defconfig
+++++ b/configs/khadas-edge-v-rk3399_defconfig
++@@ -85,4 +85,8 @@ CONFIG_USB_ETHER_SMSC95XX=y
++ CONFIG_USB_GADGET=y
++ CONFIG_USB_GADGET_DOWNLOAD=y
++ CONFIG_USB_FUNCTION_ROCKUSB=y
+++CONFIG_VIDEO=y
+++CONFIG_DISPLAY=y
+++CONFIG_VIDEO_ROCKCHIP=y
+++CONFIG_DISPLAY_ROCKCHIP_HDMI=y
++ CONFIG_ERRNO_STR=y
+diff --git a/target/linux/rockchip/armv8/base-files/etc/board.d/02_network b/target/linux/rockchip/armv8/base-files/etc/board.d/02_network
+index ea4a2cc..d295a5b 100644
+--- a/target/linux/rockchip/armv8/base-files/etc/board.d/02_network
++++ b/target/linux/rockchip/armv8/base-files/etc/board.d/02_network
+@@ -91,6 +91,10 @@ rockchip_setup_macs()
+ 		wan_mac=$(macaddr_generate_from_mmc_cid mmcblk1)
+ 		lan_mac=$(macaddr_add "$wan_mac" 1)
+ 		;;
++	khadas,edge-v)
++		# eMMC (mmc2) CID: stable, unlike the SD card
++		lan_mac=$(macaddr_generate_from_mmc_cid mmcblk2)
++		;;
+ 	friendlyarm,nanopi-r3s|\
+ 	friendlyarm,nanopi-r5c|\
+ 	friendlyarm,nanopi-r6c|\
+diff --git a/target/linux/rockchip/image/armv8.mk b/target/linux/rockchip/image/armv8.mk
+index b9f1fca..adfcf13 100644
+--- a/target/linux/rockchip/image/armv8.mk
++++ b/target/linux/rockchip/image/armv8.mk
+@@ -192,6 +192,20 @@ define Device/hinlink_h28k
+ endef
+ TARGET_DEVICES += hinlink_h28k
+ 
++define Device/khadas_edge-v
++  $(Device/rk3399)
++  DEVICE_VENDOR := Khadas
++  DEVICE_MODEL := Edge-V
++  DEVICE_DTS := rk3399-khadas-edge-v
++  UBOOT_DEVICE_NAME := khadas-edge-v-rk3399
++  BOOT_SCRIPT := khadas-edge-v
++  # onboard AP6356S needs the Khadas BCM4356A2 firmware (khadas feed),
++  # OpenWrt cypress-firmware-4356-sdio is built for BCM4356A3
++  DEVICE_PACKAGES := kmod-brcmfmac khadas-edge-wifi-firmware \
++	khadas-wifi-autoconf kmod-hwmon-pwmfan khadas-edge-console
++endef
++TARGET_DEVICES += khadas_edge-v
++
+ define Device/linkease_easepi-r1
+   $(Device/rk3568)
+   DEVICE_VENDOR := LinkEase
+diff --git a/target/linux/rockchip/image/khadas-edge-v.bootscript b/target/linux/rockchip/image/khadas-edge-v.bootscript
+new file mode 100644
+index 0000000..1f38e67
+--- /dev/null
++++ b/target/linux/rockchip/image/khadas-edge-v.bootscript
+@@ -0,0 +1,24 @@
++# Khadas Edge-V: kernel messages on HDMI (tty1) and the serial console
++part uuid ${devtype} ${devnum}:2 uuid
++
++if test $soc = 'rk3308'; then
++	serial_addr=',0xff0c0000'; serial_port='ttyS2';
++elif test $soc = 'rk3328'; then
++	serial_addr=',0xff130000'; serial_port='ttyS2';
++elif test $soc = 'rk3399'; then
++	serial_addr=',0xff1a0000'; serial_port='ttyS2';
++elif test $soc = 'rk3528'; then
++	serial_addr=',0xff9f0000'; serial_port='ttyS0';
++elif test $soc = 'rk3568'; then
++	serial_addr=',0xfe660000'; serial_port='ttyS2';
++elif test $soc = 'rk3576'; then
++	serial_addr=',0x2ad40000'; serial_port='ttyS0';
++elif test $soc = 'rk3588'; then
++	serial_addr=',0xfeb50000'; serial_port='ttyS2';
++fi
++
++setenv bootargs "console=tty1 console=${serial_port},1500000 earlycon=uart8250,mmio32${serial_addr} root=PARTUUID=${uuid} rw rootwait";
++
++load ${devtype} ${devnum}:1 ${kernel_addr_r} kernel.img
++
++bootm ${kernel_addr_r}

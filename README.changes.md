@@ -1,5 +1,24 @@
 # OpenWrt Khadas Change log
 
+## Edge-V: first boot, HDMI, kmods
+
++ only Khadas Edge-V is built (Edge / Edge-Captain profiles removed)
++ Ethernet is the uplink (DHCP client, hostname `khadas-edge`, mDNS `khadas-edge.local`): the board
+  shows up in the home router; before, it was a LAN port with the static 192.168.1.1 and its own
+  DHCP server, invisible in the router's client list (and clashing with routers on 192.168.1.1)
++ LAN = Wi-Fi access point bridge 192.168.77.1/24; web interface, SSH, Docker apps and VMs are
+  reachable from private addresses on the uplink (home network), not from the Internet;
+  root password `khadasedge` on a fresh install
++ HDMI output: U-Boot with video (logo + boot messages), kernel `kmod-drm-rockchip` (VOP + DW HDMI,
+  fbcon), console on tty1 with a USB keyboard, addresses printed on the screen
+  (the previous image had no display support at all: a black screen was expected)
++ Docker with fw4: `docker` zone forwards to `wan` and from `lan` (containers had no Internet
+  through a WAN uplink), dockerd's own WAN block rule removed (fw4 already blocks the Internet)
++ every kmod of this kernel is built (`CONFIG_ALL_KMODS`) and published as an apk repository for
+  release / manual builds (branch `apk-<run id>-<attempt>`), the image uses it: official kmods do not
+  match a kernel with KVM / built-in USB storage
++ MAC address from the eMMC CID (`mmcblk2`), stable with or without an SD card
+
 ## OpenWrt Khadas Edge 25.12.5 source build
 
 + full OpenWrt 25.12.5 source build: rockchip/armv8, Linux 6.12, mainline U-Boot 2025.10 + TF-A

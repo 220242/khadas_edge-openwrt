@@ -1,0 +1,25 @@
+#!/bin/sh
+# Package feeds. The kernel is built with KVM and USB storage for the root
+# file system on a USB SSD, kmods from downloads.openwrt.org do not match
+# it. Kmods (and the target packages) come from the apk repository built
+# together with this image (/etc/khadas-apk-repo), the khadas feed too.
+# Other feeds (base, packages, luci, ...) stay on downloads.openwrt.org.
+
+FEEDS=/etc/apk/repositories.d/distfeeds.list
+[ -f "$FEEDS" ] || exit 0
+
+repo="$(cat /etc/khadas-apk-repo 2>/dev/null)"
+
+if [ -n "$repo" ]; then
+	sed -i \
+		-e "s#^[^\#]*/targets/[^/]*/[^/]*/packages/packages.adb\$#$repo/targets/packages.adb#" \
+		-e "s#^[^\#]*/khadas/packages.adb\$#$repo/khadas/packages.adb#" \
+		"$FEEDS"
+else
+	# local build without a published repository
+	sed -i \
+		-e "s#^\([^\#]*/targets/[^/]*/[^/]*/packages/packages.adb\)\$#\# \1#" \
+		-e "s#^\([^\#]*/khadas/packages.adb\)\$#\# \1#" \
+		"$FEEDS"
+fi
+exit 0

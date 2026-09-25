@@ -1,0 +1,107 @@
+#!/bin/sh
+# Khadas Edge-V has one Ethernet port. OpenWrt makes it the LAN with the
+# static address 192.168.1.1 and a DHCP server: connected to a home router
+# the board does not show up (and 192.168.1.1 often is the router itself).
+#
+# Here the port is the uplink: DHCP client, the board appears in the router
+# as "khadas-edge". LAN is the Wi-Fi access point bridge 192.168.77.1/24
+# (routed + NAT, no clash with the usual home subnets). The web interface,
+# SSH, Docker apps and VMs are reachable from private networks on the
+# uplink side (home network), not from the Internet.
+#
+# Only a freshly generated network config is changed, settings kept over
+# sysupgrade stay as they are.
+
+lan_ip="$(uci -q get network.lan.ipaddr)"
+[ "$lan_ip" = "192.168.1.1/24" ] || [ "$lan_ip" = "192.168.1.1" ] || exit 0
+[ "$(uci -q get network.lan.device)" = "br-lan" ] || exit 0
+[ -z "$(uci -q get network.wan)" ] || exit 0
+
+br="$(uci -q show network | sed -n "s/^network\.\([^.]*\)\.name='br-lan'$/\1/p" | head -n 1)"
+[ -n "$br" ] || exit 0
+[ "$(uci -q get "network.$br.ports")" = "eth0" ] || exit 0
+
+uci -q batch <<-EOF
+	delete network.$br.ports
+	set network.$br.bridge_empty='1'
+	delete network.lan.ipaddr
+	add_list network.lan.ipaddr='192.168.77.1/24'
+	set network.wan=interface
+	set network.wan.device='eth0'
+	set network.wan.proto='dhcp'
+	set network.wan6=interface
+	set network.wan6.device='eth0'
+	set network.wan6.proto='dhcpv6'
+
+	set firewall.khadas_home=rule
+	set firewall.khadas_home.name='Allow-Home-Network'
+	set firewall.khadas_home.src='wan'
+	set firewall.khadas_home.family='ipv4'
+	add_list firewall.khadas_home.src_ip='10.0.0.0/8'
+	add_list firewall.khadas_home.src_ip='172.16.0.0/12'
+	add_list firewall.khadas_home.src_ip='192.168.0.0/16'
+	set firewall.khadas_home.proto='all'
+	set firewall.khadas_home.target='ACCEPT'
+
+	set firewall.khadas_home6=rule
+	set firewall.khadas_home6.name='Allow-Home-Network-IPv6'
+	set firewall.khadas_home6.src='wan'
+	set firewall.khadas_home6.family='ipv6'
+	add_list firewall.khadas_home6.src_ip='fc00::/7'
+	add_list firewall.khadas_home6.src_ip='fe80::/10'
+	set firewall.khadas_home6.proto='all'
+	set firewall.khadas_home6.target='ACCEPT'
+
+	set firewall.khadas_home_fwd=rule
+	set firewall.khadas_home_fwd.name='Allow-Home-Network-Forward'
+	set firewall.khadas_home_fwd.src='wan'
+	set firewall.khadas_home_fwd.dest='*'
+	set firewall.khadas_home_fwd.family='ipv4'
+	add_list firewall.khadas_home_fwd.src_ip='10.0.0.0/8'
+	add_list firewall.khadas_home_fwd.src_ip='172.16.0.0/12'
+	add_list firewall.khadas_home_fwd.src_ip='192.168.0.0/16'
+	set firewall.khadas_home_fwd.proto='all'
+	set firewall.khadas_home_fwd.target='ACCEPT'
+EOF
+
+# Docker with fw4: the docker zone (created the same way by dockerd on its
+# first start) needs forwardings, else containers have no Internet and the
+# Wi-Fi LAN can not reach them. dockerd's own "block wan" iptables rule
+# also rejects the replies to containers on the uplink; fw4 already keeps
+# the Internet away from published ports (no DNAT accept on wan), the
+# home network is allowed above.
+if [ -f /etc/config/dockerd ]; then
+	uci -q batch <<-EOF
+		set firewall.docker=zone
+		set firewall.docker.name='docker'
+		set firewall.docker.input='ACCEPT'
+		set firewall.docker.output='ACCEPT'
+		set firewall.docker.forward='ACCEPT'
+		del_list firewall.docker.network='docker'
+		add_list firewall.docker.network='docker'
+		set firewall.khadas_docker_wan=forwarding
+		set firewall.khadas_docker_wan.src='docker'
+		set firewall.khadas_docker_wan.dest='wan'
+		set firewall.khadas_lan_docker=forwarding
+		set firewall.khadas_lan_docker.src='lan'
+		set firewall.khadas_lan_docker.dest='docker'
+		del_list dockerd.firewall.blocked_interfaces='wan'
+	EOF
+	uci commit dockerd
+fi
+
+# mDNS: http://khadas-edge.local/ from the home network too
+if [ -f /etc/config/umdns ]; then
+	uci -q get umdns.@umdns[0].network | grep -qw wan || \
+		uci -q add_list umdns.@umdns[0].network='wan'
+fi
+
+# the web interface is reachable from the home network: no empty password
+if grep -q '^root::' /etc/shadow; then
+	printf 'khadasedge\nkhadasedge\n' | passwd root >/dev/null 2>&1
+fi
+
+uci commit network
+uci commit firewall
+[ -f /etc/config/umdns ] && uci commit umdns
+exit 0

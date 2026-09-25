@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    Сборка OpenWrt 25.12 для Khadas Edge / Edge-V / Edge-Captain на Windows 11.
+    Сборка OpenWrt 25.12 для Khadas Edge-V на Windows 11.
 
 .DESCRIPTION
     Скрипт всё делает сам, всё хранится на диске D: (папка -Root):
@@ -414,9 +414,9 @@ Get-ChildItem "$Root\out" -Filter '*.img.gz' | Sort-Object LastWriteTime -Descen
     ForEach-Object { Write-Host ("    {0}  ({1:N0} МБ)" -f $_.FullName, ($_.Length / 1MB)) -ForegroundColor Green }
 Write-Host ''
 Write-Host '  Запись на SD / eMMC: balenaEtcher или Rufus (файл .img.gz можно записывать без распаковки).'
-Write-Host '    khadas_edge-v       - Edge-V'
-Write-Host '    khadas_edge-captain - Edge-Captain'
-Write-Host '    khadas_edge         - Edge (модуль)'
-Write-Host '  Первый вход: http://192.168.1.1, Wi-Fi Khadas-Edge / khadasedge'
+Write-Host '  Ethernet - к домашнему роутеру: плата появится в нём как khadas-edge, адрес виден и на HDMI.'
+Write-Host '  Веб-интерфейс: http://khadas-edge.local/ или по этому адресу, root / khadasedge (смените пароль).'
+Write-Host '  Wi-Fi Khadas-Edge / khadasedge, из Wi-Fi: http://192.168.77.1'
+Write-Host ('  Модули ядра этой сборки: ' + $Root + '\out\apk-repo')
 Write-Host ''
 Start-Process explorer.exe "$Root\out"

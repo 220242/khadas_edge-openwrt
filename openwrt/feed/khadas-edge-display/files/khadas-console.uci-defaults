@@ -1,0 +1,5 @@
+#!/bin/sh
+# login on the HDMI screen (USB keyboard)
+grep -q '^tty1:' /etc/inittab || \
+	echo 'tty1::askfirst:/usr/libexec/login.sh' >> /etc/inittab
+exit 0

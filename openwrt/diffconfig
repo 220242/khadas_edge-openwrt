@@ -1,14 +1,22 @@
-# OpenWrt 25.12 for Khadas Edge / Edge-V / Edge-Captain (RockChip RK3399)
+# OpenWrt 25.12 for Khadas Edge-V (RockChip RK3399)
 # seed config: cp diffconfig .config && make defconfig
 
 ## target
 CONFIG_TARGET_rockchip=y
 CONFIG_TARGET_rockchip_armv8=y
-CONFIG_TARGET_MULTI_PROFILE=y
-CONFIG_TARGET_PER_DEVICE_ROOTFS=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_khadas_edge=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_khadas_edge-v=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_khadas_edge-captain=y
+CONFIG_TARGET_rockchip_armv8_DEVICE_khadas_edge-v=y
+
+## every kernel module is built and published as an apk repository with
+## the image (the kernel has KVM and USB storage built in, kmods from
+## downloads.openwrt.org do not match it)
+CONFIG_ALL_KMODS=y
+
+## HDMI console (U-Boot + kernel), login with a USB keyboard
+CONFIG_DISPLAY_SUPPORT=y
+CONFIG_PACKAGE_khadas-edge-console=y
+
+## http://khadas-edge.local/
+CONFIG_PACKAGE_umdns=y
 # room for docker images / VM disks on the internal storage
 CONFIG_TARGET_ROOTFS_PARTSIZE=2048
 
