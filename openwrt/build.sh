@@ -12,7 +12,8 @@
 ##   SRC=build/openwrt OpenWrt source tree
 ##   JOBS=$(nproc)
 ##   OUT=out           images output directory, the apk repository (every
-##                     kmod + the khadas feed) goes to $OUT/apk-repo[-kvm]
+##                     kmod + the khadas feed) goes to $OUT/apk-repo[-kvm],
+##                     the ImageBuilder to $OUT/imagebuilder[-kvm].tar.zst
 ##   APK_REPO_URL=     where $OUT/apk-repo gets published (https, apk
 ##                     repository root); the image then installs kmods from
 ##                     there, empty: the kmod / khadas feeds are disabled
@@ -120,6 +121,9 @@ if [ "$WITH_KVM" = 1 ]; then
 	cat "$TOP/diffconfig-kvm" >> .config
 	CONFIGS="$CONFIGS $TOP/diffconfig-kvm"
 fi
+# ImageBuilder of this kernel (packages from the apk repository below)
+echo "CONFIG_IB=y" >> .config
+echo "# CONFIG_IB_STANDALONE is not set" >> .config
 if [ "${ZT_CONTROLLER:-0}" = 1 ]; then
 	log "ZeroTier network controller enabled: non-commercial license, private use only"
 	echo "CONFIG_ZEROTIER_ENABLE_CONTROLLER=y" >> .config
@@ -160,6 +164,9 @@ for f in bin/targets/rockchip/armv8/*khadas*.img.gz bin/targets/rockchip/armv8/*
 	[ -f "$f" ] && cp -v "$f" "$OUT/$(name "$f")"
 done
 (cd "$OUT" && sha256sum -- *khadas_edge-v*.img.gz > sha256sums)
+ib=$(ls bin/targets/rockchip/armv8/openwrt-imagebuilder-*.tar.zst 2>/dev/null | head -n 1)
+[ -n "$ib" ] || die "no ImageBuilder in bin/targets/rockchip/armv8"
+cp -v "$ib" "$OUT/imagebuilder$VSUFFIX.tar.zst"
 
 # apk repository matching this kernel: kmods + target packages, khadas feed
 REPO="$OUT/apk-repo$VSUFFIX"
@@ -170,13 +177,18 @@ cp -a bin/packages/*/khadas/. "$REPO/khadas/"
 # kmods of the other feeds belong to this kernel too (the buildbot moves
 # them into its kmods feed), index + sign again like package/index
 find bin/packages -name 'kmod-*.apk' ! -path '*/khadas/*' -exec cp -a {} "$REPO/targets/" \;
+# packages of patched feeds (QEMU with edk2 for rockchip, release 101 above
+# the official one), the khadas feed carries them
+find bin/packages -name 'qemu-*.apk' ! -path '*/khadas/*' -exec cp -a {} "$REPO/khadas/" \;
 TOPDIR=$(pwd)
-(
-	cd "$REPO/targets"
-	rm -f packages.adb index.json
-	"$TOPDIR/staging_dir/host/bin/apk" mkndx --root "$TOPDIR" --keys-dir "$TOPDIR" \
-		--allow-untrusted --sign "$TOPDIR/private-key.pem" --output packages.adb *.apk
-)
+for d in targets khadas; do
+	(
+		cd "$REPO/$d"
+		rm -f packages.adb index.json
+		"$TOPDIR/staging_dir/host/bin/apk" mkndx --root "$TOPDIR" --keys-dir "$TOPDIR" \
+			--allow-untrusted --sign "$TOPDIR/private-key.pem" --output packages.adb *.apk
+	)
+done
 [ -f "$REPO/targets/packages.adb" ] || die "no packages.adb in $REPO/targets"
 [ -f "$REPO/khadas/packages.adb" ] || die "no packages.adb in $REPO/khadas"
 log "apk repository: $REPO ($(find "$REPO" -name '*.apk' | wc -l) packages, $(du -sh "$REPO" | cut -f1))"

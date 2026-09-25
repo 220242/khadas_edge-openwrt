@@ -60,8 +60,8 @@ with all images (the firmware selector reads the releases):
 
 | device | file | build |
 |---|---|---|
-| Khadas Edge-V | `openwrt-25.12.5-rockchip-armv8-khadas_edge-v-squashfs-sysupgrade.img.gz` | source build, ~2 h |
-| Khadas Edge-V + KVM | `openwrt-25.12.5-rockchip-armv8-khadas_edge-v-kvm-squashfs-sysupgrade.img.gz` | source build (`KVM=1`), ~2 h |
+| Khadas Edge-V | `openwrt-25.12.5-rockchip-armv8-khadas_edge-v-squashfs-sysupgrade.img.gz` | own kernel + ImageBuilder, ~5 min (kernel ~2 h, only when it changes) |
+| Khadas Edge-V + KVM | `openwrt-25.12.5-rockchip-armv8-khadas_edge-v-kvm-squashfs-sysupgrade.img.gz` | own kernel (`KVM=1`) + ImageBuilder |
 | PC / server x86_64 | `openwrt-25.12.5-x86-64-pc-efi.img.gz` (UEFI + BIOS), `…-pc-bios.img.gz` | ImageBuilder, ~15 min |
 | virtual machine x86_64 | `openwrt-25.12.5-x86-64-vm.qcow2` (Proxmox / QEMU), `.vmdk` (VMware), `.vdi` (VirtualBox), `.vhdx` (Hyper-V), `.img.gz` | ImageBuilder |
 | 32-bit PC, Pentium 4 and newer | `openwrt-25.12.5-i386-pc-bios.img.gz` | ImageBuilder |
@@ -79,6 +79,16 @@ file system on a USB SSD, its kernel differs from the official one, so kmods com
 repository. `edge-v-official` uses the official rockchip kernel (Edge-V dtb + U-Boot added by the
 ImageBuilder job): no HDMI console after U-Boot, no root on USB (the SSD works as a data disk),
 `apk add kmod-…` from downloads.openwrt.org.
+
+**Own kernels: [khadas-kernels](https://github.com/220242/khadas-kernels).** The Edge-V kernels
+(HDMI + USB SSD, KVM) are built from source only when something they depend on changes
+([openwrt/kernel-key.sh](openwrt/kernel-key.sh): kernel patches, kernel options of the
+diffconfigs, the target specific own packages, [openwrt/kernel-rev](openwrt/kernel-rev)). The
+job `kernel` publishes release `kernel-25.12.5-<variant>-<key>` there (ImageBuilder of that
+kernel) and branch `apk-25.12.5-<variant>-<key>` (apk repository: every kmod, target packages,
+the khadas feed, QEMU with edk2). Job `ib-edge-v` builds the images with that ImageBuilder and
+the packages of [openwrt/diffconfig](openwrt/diffconfig) in minutes. Writing needs the secret
+`KERNELS_TOKEN` (fine-grained token, `khadas-kernels`, Contents: read and write).
 
 The jobs run in parallel. ImageBuilder images: official OpenWrt kernel (kmods from downloads.openwrt.org
 work), package sets in [openwrt/ib/packages](openwrt/ib/packages):
@@ -177,14 +187,14 @@ is ignored while the eMMC still has its boot loader.
   kernel (`kernel=6.12.94~<hash>`); the Edge-V kernel has USB UAS built in (root on a USB SSD)
   and the HDMI driver, so its hash differs and apk refuses them. The x86 images use the official
   kernel: there `apk add kmod-…` works from downloads.openwrt.org
-+ so the build makes **every kmod** (`CONFIG_ALL_KMODS`) for this kernel. Release (`v*` tag) and
-  manual (Run workflow) builds publish them as an apk repository in the branch `apk-<run id>-<attempt>`
-  (`targets/` kmods, `khadas/` own packages) and the image uses it
++ so the kernel build makes **every kmod** (`CONFIG_ALL_KMODS`) for this kernel and publishes
+  them in [khadas-kernels](https://github.com/220242/khadas-kernels), branch
+  `apk-25.12.5-<variant>-<key>` (`targets/` kmods, `khadas/` own packages); the image uses it
   (`/etc/khadas-apk-repo`, `/etc/apk/repositories.d/distfeeds.list`):
   `apk update && apk add kmod-usb-net-rtl8152`
-+ other builds (and local builds) have that feed disabled; their kmods are in
++ local builds (`./openwrt/build.sh`) have that feed disabled; their kmods are in
   `out/apk-repo` (`apk add --allow-untrusted ./kmod-….apk`)
-+ old `apk-*` branches are not deleted automatically, remove them in GitHub when not needed
++ old `apk-<run id>-…` branches of this repository are not used any more, delete them in GitHub
 
 ## Storage: USB SSD, NVMe
 
@@ -249,7 +259,7 @@ wifi-autoconf --force     # configure all radios again
 + **Own controller** (no account, network created and managed on this device, clients are
   authorized in LuCI). The ZeroTier controller code is licensed for non-commercial use only
   and is therefore **not included** in the published images, build it yourself:
-  `ZT_CONTROLLER=1 ./openwrt/build.sh` (or Actions → build → Run workflow → "Add ZeroTier network controller").
+  `ZT_CONTROLLER=1 ./openwrt/build.sh`.
 
 Clients: install ZeroTier, join the network ID, enable **Allow Default Route Override**
 (Windows / macOS: "Route all traffic through ZeroTier", Android / iOS: "Route via ZeroTier").

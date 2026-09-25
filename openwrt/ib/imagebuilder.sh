@@ -2,10 +2,14 @@
 ## Images with the official OpenWrt ImageBuilder: official kernel and kmods
 ## (apk add kmod-... works from downloads.openwrt.org), the packages of
 ## openwrt/ib/packages/*.list and the own feed packages (sdk-feed.sh).
+## edge-v / edge-v-kvm: ImageBuilder of the source built kernel (HDMI, USB
+## SSD root, KVM) from the kernel repository, packages of openwrt/diffconfig.
 ##
 ## USAGE
 ##   ./openwrt/ib/imagebuilder.sh VARIANT
 ##
+##   edge-v          Khadas Edge-V, own kernel: HDMI console, root on USB SSD
+##   edge-v-kvm      edge-v + KVM virtual machines (QEMU, luci-app-kvm)
 ##   x86-64-pc       PC / server x86_64 (UEFI + BIOS): Wi-Fi, 4G/5G, Docker, NICs
 ##   x86-64-vm       virtual machine x86_64: Proxmox / QEMU (qcow2), VMware
 ##                   (vmdk), VirtualBox (vdi), Hyper-V (vhdx), raw (img.gz)
@@ -31,10 +35,16 @@ VARIANT=${1:-}
 FEED_OUT=${FEED_OUT:-$IB_ROOT/out/feed}
 OUT=${OUT:-$IB_ROOT/out}
 BOARD=
+KERNEL=
+SIZE=
+LISTS=
 HOST=openwrt
 SSID=OpenWrt
 
 case "$VARIANT" in
+	edge-v|edge-v-kvm)
+		T=rockchip S=armv8 PROFILE=khadas_edge-v KERNEL=$VARIANT
+		HOST=khadas-edge SSID=Khadas-Edge ;;
 	x86-64-pc)
 		T=x86 S=64 PROFILE=generic SIZE=1024 HOST=openwrt-pc
 		LISTS="base wificore wifipci wifiusb modem docker nic" ;;
@@ -66,12 +76,32 @@ case "$VARIANT" in
 	*) sed -n 's/^## \{0,1\}//p' "$0" >&2; exit 1 ;;
 esac
 
-IB=$WORK/imagebuilder-$T-$S
 DEST=$OUT/$VARIANT
-fetch_tool imagebuilder "$T" "$S" "$IB"
+if [ -n "$KERNEL" ]; then
+	IB=$WORK/imagebuilder-$VARIANT
+	fetch_kernel_ib "$VARIANT" "$IB"
+	# kmods / target packages / khadas feed of this kernel, the other feeds
+	# from downloads.openwrt.org
+	APK_REPO=$(kernel_apk_repo "$(cat "$IB/.khadas-kernel")")
+	arch=$(sed -n 's/^CONFIG_TARGET_ARCH_PACKAGES="\(.*\)"$/\1/p' "$IB/.config")
+	[ -n "$arch" ] || die "no CONFIG_TARGET_ARCH_PACKAGES in $IB/.config"
+	{
+		echo "$APK_REPO/targets/packages.adb"
+		echo "$APK_REPO/khadas/packages.adb"
+		for f in base packages luci routing telephony video; do
+			echo "$OW_MIRROR/releases/$OW_VER/packages/$arch/$f/packages.adb"
+		done
+	} > "$IB/repositories"
+	log "repositories: $(tr '\n' ' ' < "$IB/repositories")"
+else
+	IB=$WORK/imagebuilder-$T-$S
+	fetch_tool imagebuilder "$T" "$S" "$IB"
+fi
 
 ## own feed packages
-rm -rf "$IB/packages"
+# (kernel ImageBuilder: keep kernel / base-files / libc of its build)
+[ -n "$KERNEL" ] || rm -rf "$IB/packages"
+rm -f "$IB"/packages/packages.adb
 mkdir -p "$IB/packages"
 if ls "$FEED_OUT"/*.apk >/dev/null 2>&1; then
 	cp "$FEED_OUT"/*.apk "$IB/packages/"
@@ -171,6 +201,12 @@ have() { [ ! -s "$avail" ] || grep -qx "$1" "$avail"; }
 
 ## package list
 pkgs=""
+if [ -n "$KERNEL" ]; then
+	cfgs="$IB_TOP/diffconfig"
+	[ "$KERNEL" = edge-v-kvm ] && cfgs="$cfgs $IB_TOP/diffconfig-kvm"
+	pkgs=$(cat $cfgs | sed -n -e 's/^CONFIG_PACKAGE_\(.*\)=y$/\1/p' \
+		-e 's/^# CONFIG_PACKAGE_\(.*\) is not set$/-\1/p' | tr '\n' ' ')
+fi
 for l in $LISTS; do
 	while read -r p; do
 		case "$p" in
@@ -196,8 +232,14 @@ done
 FILES=$WORK/files-$VARIANT
 rm -rf "$FILES"
 mkdir -p "$FILES/etc/uci-defaults"
-cp "$IB_TOP/files/etc/uci-defaults/96-docker-firewall" \
-   "$IB_TOP/files/etc/uci-defaults/98-khadas-network" "$FILES/etc/uci-defaults/"
+if [ -n "$KERNEL" ]; then
+	# as the source build: every first boot script, the kmod repository
+	cp -a "$IB_TOP/files/." "$FILES/"
+	echo "$APK_REPO" > "$FILES/etc/khadas-apk-repo"
+else
+	cp "$IB_TOP/files/etc/uci-defaults/96-docker-firewall" \
+	   "$IB_TOP/files/etc/uci-defaults/98-khadas-network" "$FILES/etc/uci-defaults/"
+fi
 [ -n "$BOARD" ] && cp "$IB_TOP/files-ib/etc/uci-defaults/93-mac-from-mmc" "$FILES/etc/uci-defaults/"
 cat > "$FILES/etc/uci-defaults/90-board-name" <<EOF
 #!/bin/sh
@@ -218,16 +260,32 @@ log "$VARIANT: $T/$S $PROFILE, packages:$pkgs"
 BIN=$WORK/bin-$VARIANT
 rm -rf "$BIN"
 make -C "$IB" image PROFILE="$PROFILE" PACKAGES="$pkgs" FILES="$FILES" \
-	ROOTFS_PARTSIZE="$SIZE" BIN_DIR="$BIN"
+	${SIZE:+ROOTFS_PARTSIZE="$SIZE"} BIN_DIR="$BIN"
+
+if [ "$KERNEL" = edge-v-kvm ]; then
+	# the QEMU of the kernel repository (edk2 UEFI), not the official one
+	root=$(ls -d "$IB"/build_dir/target-*/root-rockchip | head -n 1)
+	[ -f "$root/usr/share/qemu/edk2-aarch64-code.fd" ] ||
+		die "QEMU without edk2 UEFI firmware in the image (official qemu package?)"
+fi
 
 ## canonical file names
 rm -rf "$DEST"
 mkdir -p "$DEST"
 name=openwrt-$OW_VER-$VARIANT
 pick() { ls "$BIN"/*"$1" 2>/dev/null | head -n 1 || true; }
-cp "$(ls "$BIN"/*.manifest | head -n 1)" "$DEST/$name.manifest"
+[ -n "$KERNEL" ] || cp "$(ls "$BIN"/*.manifest | head -n 1)" "$DEST/$name.manifest"
 
 case "$VARIANT" in
+	edge-v|edge-v-kvm)
+		# names of the source build: openwrt-25.12.5-rockchip-armv8-khadas_edge-v[-kvm]-...
+		for f in "$BIN"/*khadas_edge-v*.img.gz "$BIN"/*khadas_edge-v*.manifest; do
+			[ -f "$f" ] || continue
+			b=$(basename "$f")
+			[ "$VARIANT" = edge-v-kvm ] && b=${b/khadas_edge-v/khadas_edge-v-kvm}
+			cp "$f" "$DEST/$b"
+		done
+		;;
 	x86-64-pc)
 		cp "$(pick squashfs-combined-efi.img.gz)" "$DEST/$name-efi.img.gz"
 		cp "$(pick squashfs-combined.img.gz)" "$DEST/$name-bios.img.gz"
