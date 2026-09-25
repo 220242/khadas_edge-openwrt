@@ -59,6 +59,10 @@ jobs:
             echo "build=0" >> "$GITHUB_OUTPUT"
           else
             [ -n "$GH_TOKEN" ] || { echo "::error::kernel $tag is not built yet and there is no KERNELS_TOKEN secret"; exit 1; }
+            # write access before the 2 h build, not after it
+            push=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$KERNELS_REPO" |
+              python3 -c 'import json,sys; print(json.load(sys.stdin).get("permissions", {}).get("push", False))')
+            [ "$push" = True ] || { echo "::error::KERNELS_TOKEN can not write to $KERNELS_REPO (fine-grained token: repository $KERNELS_REPO, Contents: Read and write)"; exit 1; }
             echo "kernel $tag: build"
             echo "build=1" >> "$GITHUB_OUTPUT"
           fi
@@ -136,7 +140,8 @@ jobs:
           cp out/*.manifest rel/
           echo "$APK_REPO_URL" > rel/apk-repo-url
           (cd rel && sha256sum -- * > sha256sums)
-          gh release create "$TAG" --repo "$KERNELS_REPO" --title "$TAG" \
+          # tag on the apk branch: works in an empty repository too
+          gh release create "$TAG" --repo "$KERNELS_REPO" --target "$APK_BRANCH" --title "$TAG" \
             --notes "Khadas Edge-V OpenWrt $OW_VER kernel (${{ matrix.variant }}), ImageBuilder + apk repository $APK_REPO_URL, from ${GITHUB_REPOSITORY}@${GITHUB_SHA}" \
             rel/*
 
