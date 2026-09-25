@@ -1,0 +1,25 @@
+#!/bin/sh
+# Boards without a MAC address in the device tree (Khadas Edge-V, NanoPi
+# Zero2 on the official kernel): stmmac picks a random one on every boot and
+# the DHCP address changes. Stable MAC from the eMMC (else SD card) CID,
+# as OpenWrt does for its own Rockchip boards. Fresh config only.
+. /lib/functions/system.sh
+
+dev=
+for b in /sys/class/block/mmcblk[0-9]; do
+	[ -e "$b/device/cid" ] || continue
+	[ -z "$dev" ] && dev=${b##*/}
+	[ "$(cat "$b/device/type" 2>/dev/null)" = MMC ] && { dev=${b##*/}; break; }
+done
+[ -n "$dev" ] || exit 0
+
+sec=$(uci -q show network | sed -n "s/^network\.\([^.]*\)\.name='eth0'$/\1/p" | grep -v '^@device' | head -n 1)
+[ -n "$sec" ] || sec=$(uci -q show network | sed -n "s/^network\.\(@device\[[0-9]*\]\)\.name='eth0'$/\1/p" | head -n 1)
+if [ -z "$sec" ]; then
+	sec=$(uci add network device)
+	uci set "network.$sec.name=eth0"
+fi
+[ -n "$(uci -q get "network.$sec.macaddr")" ] && exit 0
+uci set "network.$sec.macaddr=$(macaddr_generate_from_mmc_cid "$dev")"
+uci commit network
+exit 0

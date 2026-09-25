@@ -11,7 +11,7 @@
 set -euo pipefail
 . "$(dirname "$0")/common.sh"
 
-PKGS="luci-app-zt-gateway luci-app-docker-apps khadas-wifi-autoconf"
+PKGS="luci-app-zt-gateway luci-app-docker-apps khadas-wifi-autoconf khadas-edge-wifi-firmware"
 HEAVY="dockerd docker docker-compose zerotier"
 FEED_OUT=${FEED_OUT:-$IB_ROOT/out/feed}
 SDK=$WORK/sdk-x86-64

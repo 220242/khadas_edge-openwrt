@@ -1,9 +1,4 @@
-# Wi-Fi: full hostapd / wpa_supplicant (AX / BE), access point on every card
--wpad-basic-mbedtls
-wpad-mbedtls
-iw
-iwinfo
-khadas-wifi-autoconf
+# Wi-Fi PCIe / M.2 cards (AX / BE) - access point on every card
 # Intel AX200 / AX210 / BE200
 ?kmod-iwlwifi
 ?iwlwifi-firmware-ax200

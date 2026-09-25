@@ -87,7 +87,7 @@ footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
 			<button id="theme" type="button" aria-label="theme">◐</button>
 		</div>
 	</header>
-	<p class="sub" data-t="subtitle">OpenWrt 25.12: Khadas Edge-V, ПК x86_64, виртуальные машины, старые 32-битные ПК. Выберите устройство.</p>
+	<p class="sub" data-t="subtitle">OpenWrt 25.12: Khadas Edge-V, NanoPi, Orange Pi, Raspberry Pi Zero, ПК x86_64, виртуальные машины, 32-битные ПК. Выберите устройство.</p>
 
 	<div class="grid" id="devices"></div>
 	<div id="out"></div>
@@ -95,7 +95,7 @@ footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
 	<footer>
 		<span data-t="footer">Образы собирает GitHub Actions из</span>
 		<a id="repolink" href="#"></a>.
-		<span data-t="footer2">Прошивка для x86 содержит официальное ядро OpenWrt: модули ядра ставятся из репозитория OpenWrt.</span>
+		<span data-t="footer2">Все образы, кроме «Khadas Edge-V» с HDMI, используют официальное ядро OpenWrt: модули ядра ставятся из репозитория OpenWrt.</span>
 	</footer>
 </div>
 
@@ -105,24 +105,24 @@ footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
 const T = {
 	ru: {
 		title: 'OpenWrt: выбор прошивки', release: 'Релиз',
-		subtitle: 'OpenWrt 25.12: Khadas Edge-V, ПК x86_64, виртуальные машины, старые 32-битные ПК. Выберите устройство.',
-		footer: 'Образы собирает GitHub Actions из', footer2: 'Прошивка для x86 содержит официальное ядро OpenWrt: модули ядра ставятся из репозитория OpenWrt.',
+		subtitle: 'OpenWrt 25.12: Khadas Edge-V, NanoPi, Orange Pi, Raspberry Pi Zero, ПК x86_64, виртуальные машины, 32-битные ПК. Выберите устройство.',
+		footer: 'Образы собирает GitHub Actions из', footer2: 'Все образы, кроме «Khadas Edge-V» с HDMI, используют официальное ядро OpenWrt: модули ядра ставятся из репозитория OpenWrt.',
 		download: 'Скачать', install: 'Установка', loading: 'Загрузка списка релизов…',
 		norel: 'Релизов пока нет. Образы последних сборок: GitHub → Actions → build → Artifacts (нужен вход в GitHub).',
 		apierr: 'Не удалось получить релизы GitHub', nofiles: 'В этом релизе нет образов для этого устройства.',
 		pre: 'предварительный', latest: 'последний', first: 'Первый вход',
-		firstText: 'Веб-интерфейс: адрес из роутера (устройство khadas-edge / OpenWrt) или http://khadas-edge.local/. Пользователь root, пароль khadasedge — смените его. С одним сетевым портом он получает адрес по DHCP; с двумя: eth0 = LAN 192.168.1.1, eth1 = WAN.',
+		firstText: 'Веб-интерфейс: адрес из роутера (имя устройства: khadas-edge, nanopi-r5c, rpi-zero, openwrt-pc…) или http://имя.local/. Пользователь root, пароль khadasedge — смените его. С одним сетевым портом он получает адрес по DHCP; с двумя: eth0 = LAN 192.168.1.1, eth1 = WAN.',
 		sha: 'SHA256', manifest: 'Список пакетов',
 	},
 	en: {
 		title: 'OpenWrt firmware selector', release: 'Release',
-		subtitle: 'OpenWrt 25.12: Khadas Edge-V, x86_64 PC, virtual machines, old 32-bit PCs. Pick a device.',
-		footer: 'Images are built by GitHub Actions from', footer2: 'x86 images use the official OpenWrt kernel: kernel modules install from the OpenWrt repository.',
+		subtitle: 'OpenWrt 25.12: Khadas Edge-V, NanoPi, Orange Pi, Raspberry Pi Zero, x86_64 PC, virtual machines, 32-bit PCs. Pick a device.',
+		footer: 'Images are built by GitHub Actions from', footer2: 'All images except "Khadas Edge-V" with HDMI use the official OpenWrt kernel: kernel modules install from the OpenWrt repository.',
 		download: 'Download', install: 'Installation', loading: 'Loading releases…',
 		norel: 'No releases yet. Images of the latest builds: GitHub → Actions → build → Artifacts (GitHub login needed).',
 		apierr: 'Could not load the GitHub releases', nofiles: 'No images for this device in this release.',
 		pre: 'pre-release', latest: 'latest', first: 'First login',
-		firstText: 'Web interface: the address from your router (device khadas-edge / OpenWrt) or http://khadas-edge.local/. User root, password khadasedge — change it. With one network port it gets its address by DHCP; with two: eth0 = LAN 192.168.1.1, eth1 = WAN.',
+		firstText: 'Web interface: the address from your router (device name: khadas-edge, nanopi-r5c, rpi-zero, openwrt-pc…) or http://name.local/. User root, password khadasedge — change it. With one network port it gets its address by DHCP; with two: eth0 = LAN 192.168.1.1, eth1 = WAN.',
 		sha: 'SHA256', manifest: 'Package list',
 	},
 };
@@ -132,7 +132,7 @@ const DEVICES = [
 	{
 		id: 'edge-v',
 		name: { ru: 'Khadas Edge-V', en: 'Khadas Edge-V' },
-		desc: { ru: 'RK3399, SD-карта / eMMC', en: 'RK3399, SD card / eMMC' },
+		desc: { ru: 'RK3399: консоль на HDMI, загрузка с USB SSD, свой репозиторий модулей ядра', en: 'RK3399: HDMI console, root on USB SSD, own kernel module repository' },
 		files: [
 			{ re: /khadas_edge-v.*sysupgrade\.img\.gz$/, name: { ru: 'Образ для SD / eMMC (и sysupgrade)', en: 'SD / eMMC image (and sysupgrade)' } },
 			{ re: /khadas_edge-v.*\.manifest$/, manifest: true },
@@ -154,6 +154,104 @@ const DEVICES = [
 			'sysupgrade': {
 				ru: ['Обновление работающей системы: Система → Резервная копия / Прошивка → Установить новую прошивку, файл <code>.img.gz</code>.'],
 				en: ['Update a running system: System → Backup / Flash Firmware → Flash image, the <code>.img.gz</code> file.'],
+			},
+		},
+	},
+	{
+		id: 'edge-v-official',
+		name: { ru: 'Khadas Edge-V · официальное ядро', en: 'Khadas Edge-V · official kernel' },
+		desc: { ru: 'RK3399, модули ядра из репозитория OpenWrt, без HDMI-консоли и загрузки с USB SSD', en: 'RK3399, kernel modules from the OpenWrt repository, no HDMI console, no USB SSD root' },
+		files: [
+			{ re: /edge-v-official-sysupgrade\.img\.gz$/, name: { ru: 'Образ для SD (и sysupgrade)', en: 'SD image (and sysupgrade)' } },
+			{ re: /edge-v-official\.manifest$/, manifest: true },
+		],
+		tabs: {
+			'SD': {
+				ru: ['Запишите <code>.img.gz</code> на microSD через balenaEtcher или Rufus (распаковывать не нужно), вставьте и включите.', 'Обновление: Система → Резервная копия / Прошивка, файл <code>-sysupgrade.img.gz</code>.'],
+				en: ['Write the <code>.img.gz</code> to a microSD card with balenaEtcher or Rufus (no need to unpack), insert it and power on.', 'Update: System → Backup / Flash Firmware, the <code>-sysupgrade.img.gz</code> file.'],
+				cmd: 'gzip -dc openwrt-*-edge-v-official-sysupgrade.img.gz | sudo dd of=/dev/sdX bs=1M conv=fsync',
+			},
+		},
+	},
+	{
+		id: 'nanopi-r5c',
+		name: { ru: 'NanoPi R5C', en: 'NanoPi R5C' },
+		desc: { ru: 'RK3568, 2× 2.5G, M.2 Wi-Fi, Docker', en: 'RK3568, 2× 2.5G, M.2 Wi-Fi, Docker' },
+		files: [
+			{ re: /nanopi-r5c-sysupgrade\.img\.gz$/, name: { ru: 'Образ для SD (и sysupgrade)', en: 'SD image (and sysupgrade)' } },
+			{ re: /nanopi-r5c\.manifest$/, manifest: true },
+		],
+		tabs: {
+			'SD': {
+				ru: ['Запишите <code>.img.gz</code> на microSD через balenaEtcher или Rufus (распаковывать не нужно), вставьте и включите.', 'Обновление: Система → Резервная копия / Прошивка, файл <code>-sysupgrade.img.gz</code>.'],
+				en: ['Write the <code>.img.gz</code> to a microSD card with balenaEtcher or Rufus (no need to unpack), insert it and power on.', 'Update: System → Backup / Flash Firmware, the <code>-sysupgrade.img.gz</code> file.'],
+				cmd: 'gzip -dc openwrt-*-nanopi-r5c-sysupgrade.img.gz | sudo dd of=/dev/sdX bs=1M conv=fsync',
+			},
+		},
+	},
+	{
+		id: 'nanopi-zero2',
+		name: { ru: 'NanoPi Zero2', en: 'NanoPi Zero2' },
+		desc: { ru: 'RK3528, 1G, USB Wi-Fi, Docker', en: 'RK3528, 1G, USB Wi-Fi, Docker' },
+		files: [
+			{ re: /nanopi-zero2-sysupgrade\.img\.gz$/, name: { ru: 'Образ для SD (и sysupgrade)', en: 'SD image (and sysupgrade)' } },
+			{ re: /nanopi-zero2\.manifest$/, manifest: true },
+		],
+		tabs: {
+			'SD': {
+				ru: ['Запишите <code>.img.gz</code> на microSD через balenaEtcher или Rufus (распаковывать не нужно), вставьте и включите.', 'Обновление: Система → Резервная копия / Прошивка, файл <code>-sysupgrade.img.gz</code>.'],
+				en: ['Write the <code>.img.gz</code> to a microSD card with balenaEtcher or Rufus (no need to unpack), insert it and power on.', 'Update: System → Backup / Flash Firmware, the <code>-sysupgrade.img.gz</code> file.'],
+				cmd: 'gzip -dc openwrt-*-nanopi-zero2-sysupgrade.img.gz | sudo dd of=/dev/sdX bs=1M conv=fsync',
+			},
+		},
+	},
+	{
+		id: 'orangepi-zero2',
+		name: { ru: 'Orange Pi Zero2', en: 'Orange Pi Zero2' },
+		desc: { ru: 'Allwinner H616, 1G, USB Wi-Fi, Docker', en: 'Allwinner H616, 1G, USB Wi-Fi, Docker' },
+		files: [
+			{ re: /orangepi-zero2-sysupgrade\.img\.gz$/, name: { ru: 'Образ для SD (и sysupgrade)', en: 'SD image (and sysupgrade)' } },
+			{ re: /orangepi-zero2\.manifest$/, manifest: true },
+		],
+		tabs: {
+			'SD': {
+				ru: ['Запишите <code>.img.gz</code> на microSD через balenaEtcher или Rufus (распаковывать не нужно), вставьте и включите.', 'Обновление: Система → Резервная копия / Прошивка, файл <code>-sysupgrade.img.gz</code>.'],
+				en: ['Write the <code>.img.gz</code> to a microSD card with balenaEtcher or Rufus (no need to unpack), insert it and power on.', 'Update: System → Backup / Flash Firmware, the <code>-sysupgrade.img.gz</code> file.'],
+				cmd: 'gzip -dc openwrt-*-orangepi-zero2-sysupgrade.img.gz | sudo dd of=/dev/sdX bs=1M conv=fsync',
+			},
+		},
+	},
+	{
+		id: 'rpi-zero',
+		name: { ru: 'Raspberry Pi Zero / Zero W', en: 'Raspberry Pi Zero / Zero W' },
+		desc: { ru: 'BCM2835, встроенный Wi-Fi (Zero W)', en: 'BCM2835, onboard Wi-Fi (Zero W)' },
+		files: [
+			{ re: /rpi-zero-factory\.img\.gz$/, name: { ru: 'Образ для первой установки (factory)', en: 'First install image (factory)' } },
+			{ re: /rpi-zero-sysupgrade\.img\.gz$/, name: { ru: 'Обновление (sysupgrade)', en: 'Update (sysupgrade)' } },
+			{ re: /rpi-zero\.manifest$/, manifest: true },
+		],
+		tabs: {
+			'SD': {
+				ru: ['Запишите <code>-factory.img.gz</code> на microSD через balenaEtcher или Rufus (распаковывать не нужно), вставьте и включите.', 'Ethernet нет: подключитесь к Wi-Fi <b>OpenWrt</b> (пароль khadasedge) и откройте http://192.168.77.1. Интернет: Сеть → Беспроводная сеть → Поиск (клиент к вашему Wi-Fi) или USB-модем.', 'Обновление: Система → Резервная копия / Прошивка, файл <code>-sysupgrade.img.gz</code>.'],
+				en: ['Write the <code>-factory.img.gz</code> to a microSD card with balenaEtcher or Rufus (no need to unpack), insert it and power on.', 'No Ethernet: join the Wi-Fi <b>OpenWrt</b> (password khadasedge) and open http://192.168.77.1. Internet: Network → Wireless → Scan (client of your Wi-Fi) or a USB modem.', 'Update: System → Backup / Flash Firmware, the <code>-sysupgrade.img.gz</code> file.'],
+				cmd: 'gzip -dc openwrt-*-rpi-zero-factory.img.gz | sudo dd of=/dev/sdX bs=1M conv=fsync',
+			},
+		},
+	},
+	{
+		id: 'rpi-zero2',
+		name: { ru: 'Raspberry Pi Zero 2 W', en: 'Raspberry Pi Zero 2 W' },
+		desc: { ru: 'BCM2710 (64 бит), встроенный Wi-Fi', en: 'BCM2710 (64-bit), onboard Wi-Fi' },
+		files: [
+			{ re: /rpi-zero2-factory\.img\.gz$/, name: { ru: 'Образ для первой установки (factory)', en: 'First install image (factory)' } },
+			{ re: /rpi-zero2-sysupgrade\.img\.gz$/, name: { ru: 'Обновление (sysupgrade)', en: 'Update (sysupgrade)' } },
+			{ re: /rpi-zero2\.manifest$/, manifest: true },
+		],
+		tabs: {
+			'SD': {
+				ru: ['Запишите <code>-factory.img.gz</code> на microSD через balenaEtcher или Rufus (распаковывать не нужно), вставьте и включите.', 'Ethernet нет: подключитесь к Wi-Fi <b>OpenWrt</b> (пароль khadasedge) и откройте http://192.168.77.1. Интернет: Сеть → Беспроводная сеть → Поиск (клиент к вашему Wi-Fi) или USB-модем.', 'Обновление: Система → Резервная копия / Прошивка, файл <code>-sysupgrade.img.gz</code>.'],
+				en: ['Write the <code>-factory.img.gz</code> to a microSD card with balenaEtcher or Rufus (no need to unpack), insert it and power on.', 'No Ethernet: join the Wi-Fi <b>OpenWrt</b> (password khadasedge) and open http://192.168.77.1. Internet: Network → Wireless → Scan (client of your Wi-Fi) or a USB modem.', 'Update: System → Backup / Flash Firmware, the <code>-sysupgrade.img.gz</code> file.'],
+				cmd: 'gzip -dc openwrt-*-rpi-zero2-factory.img.gz | sudo dd of=/dev/sdX bs=1M conv=fsync',
 			},
 		},
 	},
@@ -236,22 +334,6 @@ const DEVICES = [
 				ru: ['Запишите образ на диск и загрузитесь с него. Нужно от 256 МБ ОЗУ.'],
 				en: ['Write the image to a disk and boot from it. Needs 256 MB RAM or more.'],
 				cmd: 'gzip -dc openwrt-*-i386-pc-bios.img.gz | sudo dd of=/dev/sdX bs=1M conv=fsync',
-			},
-		},
-	},
-	{
-		id: 'i386-legacy',
-		name: { ru: 'Очень старый ПК', en: 'Very old PC' },
-		desc: { ru: 'i486 / Pentium / Pentium III', en: 'i486 / Pentium / Pentium III' },
-		files: [
-			{ re: /i386-legacy-bios\.img\.gz$/, name: { ru: 'Образ (BIOS)', en: 'Image (BIOS)' } },
-			{ re: /i386-legacy\.manifest$/, manifest: true },
-		],
-		tabs: {
-			'HDD / CF': {
-				ru: ['Запишите образ на диск или CompactFlash и загрузитесь с него. Без Docker, минимальный набор. Нужно от 128 МБ ОЗУ.'],
-				en: ['Write the image to a disk or CompactFlash and boot from it. No Docker, small package set. Needs 128 MB RAM or more.'],
-				cmd: 'gzip -dc openwrt-*-i386-legacy-bios.img.gz | sudo dd of=/dev/sdX bs=1M conv=fsync',
 			},
 		},
 	},

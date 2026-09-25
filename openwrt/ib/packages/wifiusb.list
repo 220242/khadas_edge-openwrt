@@ -1,0 +1,11 @@
+# USB Wi-Fi adapters (boards without PCIe / M.2)
+?kmod-mt7921u
+?kmod-mt7925u
+?kmod-mt76x2u
+?kmod-mt76x0u
+?kmod-mt7601u
+?kmod-rtw88-8821cu
+?kmod-rtw88-8822bu
+?kmod-rtw88-8822cu
+?kmod-rtl8xxxu
+?kmod-ath9k-htc

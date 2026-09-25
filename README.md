@@ -1,10 +1,11 @@
 # khadas edge openwrt
 
 OpenWrt 25.12 for **Khadas Edge-V** https://docs.khadas.com/edge/ (RockChip RK3399, VIM form factor),
-**x86_64** PCs, **virtual machines** (Proxmox, QEMU, VMware, VirtualBox, Hyper-V) and **32-bit** PCs.
+**NanoPi R5C / Zero2**, **Orange Pi Zero2**, **Raspberry Pi Zero / Zero 2 W**, **x86_64** PCs,
+**virtual machines** (Proxmox, QEMU, VMware, VirtualBox, Hyper-V) and **32-bit** PCs.
 
 Branch `nokvm`: no KVM / QEMU virtual machine manager on the board (VMs belong to Proxmox),
-x86 images with the official OpenWrt kernel.
+all images but the full Edge-V one with the official OpenWrt kernel (official kmods).
 
 **Firmware selector**: [selector/](selector/index.html) - on GitHub Pages
 (`https://<owner>.github.io/<repo>/`, Settings → Pages → Source: GitHub Actions, and
@@ -63,15 +64,30 @@ with all images (the firmware selector reads the releases):
 | PC / server x86_64 | `openwrt-25.12.5-x86-64-pc-efi.img.gz` (UEFI + BIOS), `…-pc-bios.img.gz` | ImageBuilder, ~15 min |
 | virtual machine x86_64 | `openwrt-25.12.5-x86-64-vm.qcow2` (Proxmox / QEMU), `.vmdk` (VMware), `.vdi` (VirtualBox), `.vhdx` (Hyper-V), `.img.gz` | ImageBuilder |
 | 32-bit PC, Pentium 4 and newer | `openwrt-25.12.5-i386-pc-bios.img.gz` | ImageBuilder |
-| very old PC, i486 / Pentium / Pentium III | `openwrt-25.12.5-i386-legacy-bios.img.gz` | ImageBuilder |
+| Khadas Edge-V, official kernel | `openwrt-25.12.5-edge-v-official-sysupgrade.img.gz` | ImageBuilder + [boards/khadas-edge-v](boards/khadas-edge-v) |
+| NanoPi R5C | `openwrt-25.12.5-nanopi-r5c-sysupgrade.img.gz` | ImageBuilder |
+| NanoPi Zero2 | `openwrt-25.12.5-nanopi-zero2-sysupgrade.img.gz` | ImageBuilder + [boards/nanopi-zero2](boards/nanopi-zero2) |
+| Orange Pi Zero2 | `openwrt-25.12.5-orangepi-zero2-sysupgrade.img.gz` | ImageBuilder |
+| Raspberry Pi Zero / Zero W | `openwrt-25.12.5-rpi-zero-factory.img.gz`, `-sysupgrade` | ImageBuilder |
+| Raspberry Pi Zero 2 W | `openwrt-25.12.5-rpi-zero2-factory.img.gz`, `-sysupgrade` | ImageBuilder |
 
-The jobs run in parallel. x86 images: official OpenWrt kernel (kmods from downloads.openwrt.org work),
-package sets in [openwrt/ib/packages](openwrt/ib/packages):
+**Edge-V: full or official kernel.** The full image (source build) has the HDMI console and the root
+file system on a USB SSD, its kernel differs from the official one, so kmods come from this project's
+repository. `edge-v-official` uses the official rockchip kernel (Edge-V dtb + U-Boot added by the
+ImageBuilder job): no HDMI console after U-Boot, no root on USB (the SSD works as a data disk),
+`apk add kmod-…` from downloads.openwrt.org.
+
+The jobs run in parallel. ImageBuilder images: official OpenWrt kernel (kmods from downloads.openwrt.org
+work), package sets in [openwrt/ib/packages](openwrt/ib/packages):
 
 + `x86-64-pc`: Wi-Fi AX / BE cards with access point autoconfig, 4G / 5G modems, Docker + one click
   apps, ZeroTier gateway, 2.5G / 10G network cards
 + `x86-64-vm`: Docker + apps, ZeroTier gateway, `qemu-ga` (virtio / vmxnet3 / Hyper-V drivers are in the kernel)
-+ `i386-pc`: Wi-Fi, modems, ZeroTier (no Docker), `i386-legacy`: small set for old hardware
++ `i386-pc`: Wi-Fi, modems, ZeroTier (no Docker)
++ `edge-v-official`, `nanopi-r5c`: Wi-Fi (PCIe + USB), modems, Docker; `nanopi-zero2`, `orangepi-zero2`:
+  USB Wi-Fi, Docker; `rpi-zero`, `rpi-zero2`: onboard + USB Wi-Fi (no Ethernet: Wi-Fi `OpenWrt` /
+  `khadasedge`, http://192.168.77.1)
++ host name per image (`khadas-edge`, `nanopi-r5c`, `rpi-zero`, `openwrt-pc`, ...), `http://<name>.local/`
 + one network port (typical VM): DHCP uplink like the Edge-V; two or more: `eth0` LAN 192.168.1.1, `eth1` WAN
 
 ## Build
@@ -91,7 +107,8 @@ OW_REL=v25.12.5 JOBS=8 ./openwrt/build.sh
 
 + [openwrt/patches](openwrt/patches) - Khadas Edge-V device (U-Boot with HDMI), USB UAS built in
 + [openwrt/ib](openwrt/ib) - x86 images: `sdk-feed.sh` (own packages with the official SDK),
-  `imagebuilder.sh x86-64-pc|x86-64-vm|i386-pc|i386-legacy`
+  `imagebuilder.sh x86-64-pc|x86-64-vm|i386-pc|edge-v-official|nanopi-r5c|nanopi-zero2|orangepi-zero2|rpi-zero|rpi-zero2`;
+  boards OpenWrt does not have (Edge-V, NanoPi Zero2) are added from `boards/*/board.conf` (dtb, U-Boot)
 + [openwrt/diffconfig](openwrt/diffconfig) - package selection
 + [openwrt/feed](openwrt/feed) - own packages:
   `luci-app-zt-gateway` (ZeroTier gateway), `luci-app-docker-apps`
@@ -116,8 +133,8 @@ powershell -ExecutionPolicy Bypass -File D:\build-khadas-edge.ps1
 
 or double click `windows\build-khadas-edge.cmd` in a checkout. Options: `-Root E:\dir`, `-Jobs 8`,
 `-Clean`, `-NoBuild` (only prepare, then `make menuconfig` in `\\wsl$\khadas-build\home\builder\khadas_edge-openwrt\build\openwrt`),
-`-ZtController`, `-Uninstall`, `-Targets edge-v,x86-64-pc,x86-64-vm,i386-pc,i386-legacy` (or `all`;
-x86 targets take minutes: official SDK + ImageBuilder). Running it again updates the project and rebuilds only what changed.
+`-ZtController`, `-Uninstall`, `-Targets edge-v,edge-v-official,nanopi-r5c,x86-64-vm,...` (or `all`;
+ImageBuilder targets take minutes: official SDK + ImageBuilder). Running it again updates the project and rebuilds only what changed.
 
 ## Installation
 

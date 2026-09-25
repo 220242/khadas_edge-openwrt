@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    Сборка OpenWrt 25.12 для Khadas Edge-V и x86 (ПК, виртуальные машины, 32 бит) на Windows 11.
+    Сборка OpenWrt 25.12 для Khadas Edge-V, плат NanoPi / Orange Pi / Raspberry Pi Zero и x86 на Windows 11.
 
 .DESCRIPTION
     Скрипт всё делает сам, всё хранится на диске D: (папка -Root):
@@ -27,7 +27,8 @@
       x86-64-pc    ПК / сервер x86_64 (официальный ImageBuilder, минуты)
       x86-64-vm    виртуальная машина: Proxmox qcow2, VMware vmdk, VirtualBox vdi, Hyper-V vhdx
       i386-pc      32-битный ПК (Pentium 4 и новее)
-      i386-legacy  очень старый ПК (i486 / Pentium / Pentium III)
+      edge-v-official  Khadas Edge-V на официальном ядре (модули из репозитория OpenWrt)
+      nanopi-r5c, nanopi-zero2, orangepi-zero2, rpi-zero, rpi-zero2
       all          всё перечисленное
 
 .PARAMETER Jobs
@@ -315,14 +316,14 @@ options = "uid=$B_UID,gid=$B_GID,umask=022"
 appendWindowsPath=false
 EOF
 
-MARK=/var/lib/khadas-build-deps-v2
+MARK=/var/lib/khadas-build-deps-v3
 if [ ! -f "$MARK" ]; then
 	apt-get update
 	apt-get install -y --no-install-recommends \
 		build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
 		gettext git libncurses-dev libssl-dev python3 python3-dev \
 		python3-setuptools python3-pyelftools rsync swig unzip zlib1g-dev \
-		file wget curl ca-certificates bzip2 zstd xz-utils patch perl qemu-utils \
+		file wget curl ca-certificates bzip2 zstd xz-utils patch perl qemu-utils u-boot-tools device-tree-compiler \
 		diffutils time tar sudo
 	touch "$MARK"
 fi
@@ -339,13 +340,13 @@ $buildSh = @'
 set -eo pipefail
 REPO="$1"; BRANCH="$2"; JOBS="$3"; ZT="$4"; CLEAN="$5"; MODE="$6"; OUT="$7"; LOG="$8"
 TARGETS="${9:-edge-v}"
-[ "$TARGETS" = all ] && TARGETS=edge-v,x86-64-pc,x86-64-vm,i386-pc,i386-legacy
+[ "$TARGETS" = all ] && TARGETS=edge-v,x86-64-pc,x86-64-vm,i386-pc,edge-v-official,nanopi-r5c,nanopi-zero2,orangepi-zero2,rpi-zero,rpi-zero2
 EDGE=0
 X86=
 for t in ${TARGETS//,/ }; do
 	case "$t" in
 		edge-v) EDGE=1 ;;
-		x86-64-pc|x86-64-vm|i386-pc|i386-legacy) X86="$X86 $t" ;;
+		x86-64-pc|x86-64-vm|i386-pc|edge-v-official|nanopi-r5c|nanopi-zero2|orangepi-zero2|rpi-zero|rpi-zero2) X86="$X86 $t" ;;
 		*) echo "ОШИБКА: неизвестная цель $t" >&2; exit 2 ;;
 	esac
 done
@@ -387,7 +388,7 @@ STEP=
 		JOBS="$JOBS" ZT_CONTROLLER="$ZT" OUT="$OUT" ./openwrt/build.sh $STEP
 	fi
 	if [ -n "$X86" ] && [ "$MODE" != prepare ]; then
-		echo "==> пакеты для x86 (официальный SDK)"
+		echo "==> свои пакеты (официальный SDK)"
 		FEED_OUT="$OUT/feed" ./openwrt/ib/sdk-feed.sh
 		for v in $X86; do
 			echo "==> $v (официальный ImageBuilder)"

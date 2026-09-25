@@ -1,5 +1,16 @@
 # OpenWrt Khadas Change log
 
+## nokvm: more boards, Edge-V on the official kernel
+
++ `edge-v-official`: Khadas Edge-V with the official rockchip kernel and kmods (ImageBuilder,
+  device + dtb + U-Boot injected from `boards/khadas-edge-v`), no HDMI console / USB SSD root
++ NanoPi R5C, Orange Pi Zero2, Raspberry Pi Zero / Zero W, Raspberry Pi Zero 2 W (official
+  profiles), NanoPi Zero2 (RK3528, not in OpenWrt 25.12.5: dtb from Linux 6.18 compiled with the
+  OpenWrt kernel tree, generic RK3528 U-Boot, `boards/nanopi-zero2`)
++ `i386-legacy` removed
++ stable MAC from the eMMC / SD CID for the injected boards, host name + SSID per image
++ package lists: `wificore`, `wifipci`, `wifiusb`; optional packages with a dependency (`?pkg:dep`)
+
 ## nokvm: Edge-V + x86, firmware selector
 
 + branch `nokvm`: no KVM in the Edge-V kernel, no QEMU / `luci-app-kvm` (virtual machines belong

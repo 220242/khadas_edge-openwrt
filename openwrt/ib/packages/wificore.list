@@ -1,0 +1,6 @@
+# Wi-Fi: full hostapd / wpa_supplicant (AX / BE), access point on every card
+-wpad-basic-mbedtls
+wpad-mbedtls
+iw
+iwinfo
+khadas-wifi-autoconf

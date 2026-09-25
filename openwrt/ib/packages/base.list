@@ -1,5 +1,6 @@
-# every x86 image. "name" required, "?name" optional (skipped with a
-# warning when the target has no such package), "-name" removed
+# every image. "name" required, "?name" optional (skipped with a
+# warning when the target has no such package), "?name:dep" optional and
+# only with dep, "-name" removed
 luci
 luci-ssl
 luci-app-ttyd
@@ -17,6 +18,6 @@ kmod-fs-ext4
 ?kmod-fs-exfat
 ?kmod-fs-ntfs3
 # ZeroTier internet gateway (Services -> ZeroTier Gateway)
-zerotier
-luci-app-zt-gateway
+?zerotier
+?luci-app-zt-gateway:zerotier
 ?luci-proto-wireguard
