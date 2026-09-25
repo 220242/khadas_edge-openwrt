@@ -1,0 +1,18 @@
+
+config kvm 'global'
+	# directory for VM disks / UEFI vars (use NVMe, USB or SD storage)
+	option storage '/mnt/vm'
+
+# example VM (disabled): install Debian arm64 from ISO
+config vm 'debian'
+	option enabled '0'
+	option cpus '2'
+	option memory '1024'
+	option disk '/mnt/vm/debian.qcow2'
+	option disk_size '16G'
+	option cdrom '/mnt/vm/debian-13-arm64-netinst.iso'
+	option bridge 'br-lan'
+	option vnc '0'
+	# RK3399: cores 0-3 = Cortex-A53, 4-5 = Cortex-A72, KVM vCPUs must
+	# stay on one core type (default: 1-2 vCPUs -> 4-5, 3-4 vCPUs -> 0-3)
+	#option cpu_affinity '4-5'

@@ -134,8 +134,8 @@ const DEVICES = [
 		name: { ru: 'Khadas Edge-V', en: 'Khadas Edge-V' },
 		desc: { ru: 'RK3399: консоль на HDMI, загрузка с USB SSD, свой репозиторий модулей ядра', en: 'RK3399: HDMI console, root on USB SSD, own kernel module repository' },
 		files: [
-			{ re: /khadas_edge-v.*sysupgrade\.img\.gz$/, name: { ru: 'Образ для SD / eMMC (и sysupgrade)', en: 'SD / eMMC image (and sysupgrade)' } },
-			{ re: /khadas_edge-v.*\.manifest$/, manifest: true },
+			{ re: /khadas_edge-v-squashfs-sysupgrade\.img\.gz$/, name: { ru: 'Образ для SD / eMMC (и sysupgrade)', en: 'SD / eMMC image (and sysupgrade)' } },
+			{ re: /khadas_edge-v\.manifest$/, manifest: true },
 		],
 		tabs: {
 			'SD / eMMC': {
@@ -150,6 +150,34 @@ const DEVICES = [
 					'HDMI: U-Boot logo, then the Linux console with the board addresses. Ethernet to the router, the board gets its address by DHCP.',
 				],
 				cmd: 'gzip -dc openwrt-*-khadas_edge-v-*-sysupgrade.img.gz | sudo dd of=/dev/sdX bs=1M conv=fsync',
+			},
+			'sysupgrade': {
+				ru: ['Обновление работающей системы: Система → Резервная копия / Прошивка → Установить новую прошивку, файл <code>.img.gz</code>.'],
+				en: ['Update a running system: System → Backup / Flash Firmware → Flash image, the <code>.img.gz</code> file.'],
+			},
+		},
+	},
+	{
+		id: 'edge-v-kvm',
+		name: { ru: 'Khadas Edge-V · KVM', en: 'Khadas Edge-V · KVM' },
+		desc: { ru: 'как Khadas Edge-V + виртуальные машины (KVM / QEMU, Сервисы → Виртуальные машины)', en: 'as Khadas Edge-V + virtual machines (KVM / QEMU, Services → Virtual Machines)' },
+		files: [
+			{ re: /khadas_edge-v-kvm-squashfs-sysupgrade\.img\.gz$/, name: { ru: 'Образ для SD / eMMC (и sysupgrade)', en: 'SD / eMMC image (and sysupgrade)' } },
+			{ re: /khadas_edge-v-kvm\.manifest$/, manifest: true },
+		],
+		tabs: {
+			'SD / eMMC': {
+				ru: [
+					'Запишите <code>.img.gz</code> на SD-карту через balenaEtcher или Rufus (распаковывать не нужно).',
+					'Загрузчик RK3399 сначала ищет систему в SPI-памяти, потом на eMMC, потом на SD. С заводской системой на eMMC SD-карта игнорируется: запишите образ на eMMC через Krescue (docs.khadas.com) или сотрите загрузчик на eMMC.',
+					'HDMI: логотип U-Boot, затем консоль Linux с адресами платы. Ethernet — к роутеру, плата получит адрес по DHCP.',
+				],
+				en: [
+					'Write the <code>.img.gz</code> to an SD card with balenaEtcher or Rufus (no need to unpack).',
+					'The RK3399 boot ROM tries SPI flash, then eMMC, then SD. With the stock system on the eMMC the SD card is ignored: write the image to the eMMC with Krescue (docs.khadas.com) or erase the eMMC boot loader.',
+					'HDMI: U-Boot logo, then the Linux console with the board addresses. Ethernet to the router, the board gets its address by DHCP.',
+				],
+				cmd: 'gzip -dc openwrt-*-khadas_edge-v-kvm-*-sysupgrade.img.gz | sudo dd of=/dev/sdX bs=1M conv=fsync',
 			},
 			'sysupgrade': {
 				ru: ['Обновление работающей системы: Система → Резервная копия / Прошивка → Установить новую прошивку, файл <code>.img.gz</code>.'],

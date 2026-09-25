@@ -1,5 +1,15 @@
 # OpenWrt Khadas Change log
 
+## Edge-V Wi-Fi fix, KVM variant back
+
++ onboard Wi-Fi did not start: the module is AMPAK **AP6398S (BCM4359)** (Khadas fenix: "AP6398S only
+  on Edge, VIM2 V14 and VIM3"), not AP6356S as the Linux device tree comment says; brcmfmac asked for
+  `brcmfmac4359-sdio.*`, which no image had. `khadas-edge-wifi-firmware` now ships the AP6398S firmware
+  (9.87.51.11.82) + NVRAM and keeps the AP6356S one (brcmfmac picks by chip ID), all with
+  `khadas,edge-v` board names; the SDK job checks the package contents
++ `edge-v-kvm`: the full Edge-V image + KVM / QEMU / luci-app-kvm (`KVM=1 ./openwrt/build.sh`,
+  `openwrt/patches-kvm`, `diffconfig-kvm`), built in parallel with `edge-v`
+
 ## nokvm: more boards, Edge-V on the official kernel
 
 + `edge-v-official`: Khadas Edge-V with the official rockchip kernel and kmods (ImageBuilder,

@@ -27,20 +27,26 @@ permissions:
   contents: write
 
 jobs:
-  # Khadas Edge-V: full source build (device, U-Boot, kernel with HDMI + UAS)
+  # Khadas Edge-V: full source build (device, U-Boot, kernel with HDMI + UAS),
+  # with and without KVM virtual machines
   edge-v:
     if: github.event_name != 'workflow_dispatch' || inputs.targets != 'imagebuilder'
     runs-on: ubuntu-24.04
     timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [ edge-v, edge-v-kvm ]
     env:
       OW_REL: v25.12.5
       SRC: /mnt/build/openwrt
+      KVM: ${{ matrix.variant == 'edge-v-kvm' && '1' || '0' }}
       ZT_CONTROLLER: ${{ inputs.zerotier_controller && '1' || '0' }}
       # apk repository (all kmods + khadas feed) matching the image kernel:
       # tag builds and manual runs publish it as a new branch, served by
       # raw.githubusercontent.com; other builds leave the kmod feed disabled
-      APK_BRANCH: apk-${{ github.run_id }}-${{ github.run_attempt }}
-      APK_REPO_URL: ${{ (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_kmods)) && format('https://raw.githubusercontent.com/{0}/apk-{1}-{2}', github.repository, github.run_id, github.run_attempt) || '' }}
+      APK_BRANCH: apk-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.variant }}
+      APK_REPO_URL: ${{ (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_kmods)) && format('https://raw.githubusercontent.com/{0}/apk-{1}-{2}-{3}', github.repository, github.run_id, github.run_attempt, matrix.variant) || '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -79,7 +85,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: openwrt-${{ env.OW_REL }}-khadas-edge-v${{ env.ZT_CONTROLLER == '1' && '-zt-controller' || '' }}
+          name: openwrt-${{ env.OW_REL }}-khadas-${{ matrix.variant }}${{ env.ZT_CONTROLLER == '1' && '-zt-controller' || '' }}
           path: |
             out/*.img.gz
             out/sha256sums
@@ -91,7 +97,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -e
-          cd out/apk-repo
+          cd out/apk-repo${{ matrix.variant == 'edge-v-kvm' && '-kvm' || '' }}
           cat > README.md <<EOF
           apk repository for the Khadas Edge-V OpenWrt image built from
           ${GITHUB_SHA} (run ${GITHUB_RUN_ID}): every kernel module of that

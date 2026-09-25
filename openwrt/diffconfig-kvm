@@ -1,0 +1,8 @@
+## KVM variant (KVM=1 ./openwrt/build.sh): virtual machines on the board
+## with openwrt/patches-kvm (kernel KVM, QEMU edk2 for rockchip)
+CONFIG_PACKAGE_luci-app-kvm=y
+CONFIG_PACKAGE_qemu-aarch64-softmmu=y
+CONFIG_PACKAGE_qemu-img=y
+CONFIG_PACKAGE_kmod-vhost-net=y
+CONFIG_PACKAGE_kmod-tun=y
+CONFIG_PACKAGE_taskset=y

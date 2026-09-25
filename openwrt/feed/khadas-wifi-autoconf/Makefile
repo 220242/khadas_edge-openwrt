@@ -20,7 +20,7 @@ define Package/khadas-wifi-autoconf
 endef
 
 define Package/khadas-wifi-autoconf/description
- Configures every detected Wi-Fi radio (onboard AP6356S and PCIe / USB
+ Configures every detected Wi-Fi radio (onboard AP6398S and PCIe / USB
  cards: Intel AX200/AX210/BE200, MediaTek, Realtek, Qualcomm) as an
  access point with a band, channel and HT mode that the driver can
  really use for AP (no-IR / radar channels are skipped, Intel cards

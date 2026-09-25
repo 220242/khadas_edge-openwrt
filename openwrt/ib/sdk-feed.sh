@@ -49,5 +49,17 @@ for p in $PKGS; do
 	[ -n "$f" ] || die "no apk for $p"
 	cp -v "$f" "$FEED_OUT/"
 done
+# the Edge-V Wi-Fi firmware must carry the board specific names
+f=$(ls "$FEED_OUT"/khadas-edge-wifi-firmware-*.apk)
+x=$WORK/fw-check
+rm -rf "$x"
+mkdir -p "$x"
+staging_dir/host/bin/apk extract --allow-untrusted --destination "$x" "$f"
+for n in brcmfmac4359-sdio.khadas,edge-v.bin brcmfmac4359-sdio.khadas,edge-v.txt \
+	 brcmfmac4356-sdio.khadas,edge-v.bin brcmfmac4356-sdio.bin brcmfmac4359-sdio.txt; do
+	[ -e "$x/lib/firmware/brcm/$n" ] || die "$(basename "$f"): no /lib/firmware/brcm/$n"
+done
+log "$(basename "$f"): $(ls "$x/lib/firmware/brcm" | tr '\n' ' ')"
+
 log "feed packages: $FEED_OUT"
 ls -l "$FEED_OUT"

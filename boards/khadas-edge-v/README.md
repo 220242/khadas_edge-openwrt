@@ -15,7 +15,7 @@ reference, other distributions and manual recovery.
 | `u-boot/301-khadas-edge-v-enable-HDMI.patch` | U-Boot defconfig change: video on HDMI | this project |
 | `u-boot/khadas-edge-v-rk3399.config` | full U-Boot configuration used | |
 | `boot/boot.cmd`, `boot/boot.scr` | OpenWrt boot script (console on HDMI + serial) | this project, `mkimage -T script` |
-| `wifi/brcmfmac4356-sdio.bin`, `wifi/brcmfmac4356-sdio.txt` | AP6356S firmware (BCM4356A2, 7.35.184) + Khadas NVRAM | [khadas/fenix](https://github.com/khadas/fenix/tree/1eded14ff94001cee8b6350adff1dc03292f2743/archives/hwpacks/wlan-firmware/brcm), Broadcom firmware license |
+| `wifi/brcmfmac4359-sdio.*`, `wifi/brcmfmac4356-sdio.*` | AP6398S (BCM4359C0, 9.87.51.11.82, fenix `*_ap6398s`) and AP6356S (BCM4356A2, 7.35.184) firmware + NVRAM | [khadas/fenix](https://github.com/khadas/fenix/tree/1eded14ff94001cee8b6350adff1dc03292f2743/archives/hwpacks/wlan-firmware/brcm), Broadcom firmware license |
 | `openwrt/armv8.mk.device` | OpenWrt device definition | this project |
 | `openwrt/uboot-rockchip.mk` | OpenWrt U-Boot package entry | this project |
 | `openwrt/02_network.snippet` | MAC address from the eMMC CID | this project |
@@ -26,7 +26,8 @@ reference, other distributions and manual recovery.
 + SoC RK3399: 2x Cortex-A72 + 4x Cortex-A53, Mali-T860, LPDDR4
 + storage: eMMC (`mmc2`, Linux `mmcblk2`), SD card (`mmc1`, `mmcblk1`),
   SPI NOR flash W25Q128FW 16 MB (`spi1`), PCIe (enabled in the Edge-V device tree)
-+ Wi-Fi / BT: AP6356S (BCM4356A2, SDIO `mmc0`), 2x2 802.11ac + BT 4.1
++ Wi-Fi / BT: AMPAK AP6398S (BCM4359C0, Khadas fenix) - the Linux device tree comment says AP6356S
+  (BCM4356A2); both firmwares are installed, `mmc0` SDIO, 2x2 802.11ac
 + Ethernet: RK3399 GMAC, RGMII PHY, one port
 + HDMI 2.0 (VOP big/little + Synopsys DW HDMI), PWM fan, IR receiver,
   keys: power (GPIO), recovery (ADC), LEDs `sys_led`, `user_led`

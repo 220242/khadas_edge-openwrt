@@ -24,6 +24,7 @@
 .PARAMETER Targets
     Что собирать, через запятую (по умолчанию edge-v):
       edge-v       Khadas Edge-V (сборка из исходников, 1-4 часа)
+      edge-v-kvm   Khadas Edge-V + виртуальные машины KVM (из исходников, 1-4 часа)
       x86-64-pc    ПК / сервер x86_64 (официальный ImageBuilder, минуты)
       x86-64-vm    виртуальная машина: Proxmox qcow2, VMware vmdk, VirtualBox vdi, Hyper-V vhdx
       i386-pc      32-битный ПК (Pentium 4 и новее)
@@ -340,12 +341,14 @@ $buildSh = @'
 set -eo pipefail
 REPO="$1"; BRANCH="$2"; JOBS="$3"; ZT="$4"; CLEAN="$5"; MODE="$6"; OUT="$7"; LOG="$8"
 TARGETS="${9:-edge-v}"
-[ "$TARGETS" = all ] && TARGETS=edge-v,x86-64-pc,x86-64-vm,i386-pc,edge-v-official,nanopi-r5c,nanopi-zero2,orangepi-zero2,rpi-zero,rpi-zero2
+[ "$TARGETS" = all ] && TARGETS=edge-v,edge-v-kvm,x86-64-pc,x86-64-vm,i386-pc,edge-v-official,nanopi-r5c,nanopi-zero2,orangepi-zero2,rpi-zero,rpi-zero2
 EDGE=0
+EDGEKVM=0
 X86=
 for t in ${TARGETS//,/ }; do
 	case "$t" in
 		edge-v) EDGE=1 ;;
+		edge-v-kvm) EDGEKVM=1 ;;
 		x86-64-pc|x86-64-vm|i386-pc|edge-v-official|nanopi-r5c|nanopi-zero2|orangepi-zero2|rpi-zero|rpi-zero2) X86="$X86 $t" ;;
 		*) echo "ОШИБКА: неизвестная цель $t" >&2; exit 2 ;;
 	esac
@@ -375,9 +378,12 @@ fi
 cd "$PROJECT"
 echo "==> проект: $(git log -1 --format='%h %s')"
 
-if [ "$CLEAN" = 1 ] && [ -d build/openwrt ]; then
-	echo "==> make clean"
-	make -C build/openwrt clean
+if [ "$CLEAN" = 1 ]; then
+	for d in build/openwrt build/openwrt-kvm; do
+		[ -d "$d" ] || continue
+		echo "==> make clean ($d)"
+		make -C "$d" clean
+	done
 fi
 
 STEP=
@@ -386,6 +392,10 @@ STEP=
 	if [ "$EDGE" = 1 ]; then
 		echo "==> Khadas Edge-V"
 		JOBS="$JOBS" ZT_CONTROLLER="$ZT" OUT="$OUT" ./openwrt/build.sh $STEP
+	fi
+	if [ "$EDGEKVM" = 1 ]; then
+		echo "==> Khadas Edge-V + KVM"
+		KVM=1 JOBS="$JOBS" ZT_CONTROLLER="$ZT" OUT="$OUT" ./openwrt/build.sh $STEP
 	fi
 	if [ -n "$X86" ] && [ "$MODE" != prepare ]; then
 		echo "==> свои пакеты (официальный SDK)"

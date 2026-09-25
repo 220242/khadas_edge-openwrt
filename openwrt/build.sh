@@ -12,10 +12,13 @@
 ##   SRC=build/openwrt OpenWrt source tree
 ##   JOBS=$(nproc)
 ##   OUT=out           images output directory, the apk repository (every
-##                     kmod + the khadas feed) goes to $OUT/apk-repo
+##                     kmod + the khadas feed) goes to $OUT/apk-repo[-kvm]
 ##   APK_REPO_URL=     where $OUT/apk-repo gets published (https, apk
 ##                     repository root); the image then installs kmods from
 ##                     there, empty: the kmod / khadas feeds are disabled
+##   KVM=1             virtual machines (KVM kernel, QEMU, luci-app-kvm):
+##                     openwrt/patches-kvm + diffconfig-kvm, images named
+##                     ...khadas_edge-v-kvm-..., default SRC build/openwrt-kvm
 ##   ZT_CONTROLLER=1   add the ZeroTier network controller (ZeroTier
 ##                     Source-Available License: non-commercial use only,
 ##                     do not distribute such images)
@@ -27,7 +30,10 @@ ROOT=$(cd "$TOP/.." && pwd)
 
 OW_REL=${OW_REL:-v25.12.5}
 OW_GIT=${OW_GIT:-https://github.com/openwrt/openwrt.git}
-SRC=${SRC:-$ROOT/build/openwrt}
+KVM=${KVM:-0}
+VSUFFIX=
+[ "$KVM" = 1 ] && VSUFFIX=-kvm
+SRC=${SRC:-$ROOT/build/openwrt$VSUFFIX}
 JOBS=${JOBS:-$(nproc)}
 OUT=${OUT:-$ROOT/out}
 STEP=${1:-all}
@@ -61,8 +67,12 @@ fi
 
 cd "$SRC"
 
-for p in "$TOP"/patches/*.patch; do
-	apply_patch "$SRC" "$p"
+PATCHES="$TOP/patches"
+[ "$KVM" = 1 ] && PATCHES="$PATCHES $TOP/patches-kvm"
+for d in $PATCHES; do
+	for p in "$d"/*.patch; do
+		apply_patch "$SRC" "$p"
+	done
 done
 
 ## feeds: release pinned commits, github mirrors + local feed
@@ -76,11 +86,14 @@ echo "src-link khadas $TOP/feed" >> feeds.conf
 log "feeds update"
 ./scripts/feeds update -a
 
-for d in "$TOP"/patches/feeds/*/; do
-	feed=$(basename "$d")
-	for p in "$d"*.patch; do
-		[ -f "$p" ] || continue
-		apply_patch "$SRC/feeds/$feed" "$p"
+for pd in $PATCHES; do
+	for d in "$pd"/feeds/*/; do
+		[ -d "$d" ] || continue
+		feed=$(basename "$d")
+		for p in "$d"*.patch; do
+			[ -f "$p" ] || continue
+			apply_patch "$SRC/feeds/$feed" "$p"
+		done
 	done
 done
 
@@ -98,6 +111,12 @@ fi
 
 ## config
 cp "$TOP/diffconfig" .config
+CONFIGS="$TOP/diffconfig"
+if [ "$KVM" = 1 ]; then
+	log "KVM variant"
+	cat "$TOP/diffconfig-kvm" >> .config
+	CONFIGS="$CONFIGS $TOP/diffconfig-kvm"
+fi
 if [ "${ZT_CONTROLLER:-0}" = 1 ]; then
 	log "ZeroTier network controller enabled: non-commercial license, private use only"
 	echo "CONFIG_ZEROTIER_ENABLE_CONTROLLER=y" >> .config
@@ -113,7 +132,7 @@ while read -r line; do
 		grep -q "^$sym=y" .config || missing="$missing $sym"
 		;;
 	esac
-done < "$TOP/diffconfig"
+done < <(cat $CONFIGS)
 [ -z "$missing" ] || die "not selected after defconfig:$missing"
 if [ "${ZT_CONTROLLER:-0}" = 1 ]; then
 	grep -q '^CONFIG_ZEROTIER_ENABLE_CONTROLLER=y' .config || die "ZeroTier controller not selected"
@@ -132,12 +151,15 @@ log "build with $JOBS jobs"
 make -j"$JOBS" IGNORE_ERRORS=m || make -j1 V=s IGNORE_ERRORS=m
 
 mkdir -p "$OUT"
-cp -v bin/targets/rockchip/armv8/*khadas*.img.gz "$OUT"/
-cp -v bin/targets/rockchip/armv8/sha256sums "$OUT"/ 2>/dev/null || true
-cp -v bin/targets/rockchip/armv8/*.manifest "$OUT"/ 2>/dev/null || true
+# KVM images get their own names (both variants in one release)
+name() { local b; b=$(basename "$1"); echo "${b/khadas_edge-v/khadas_edge-v$VSUFFIX}"; }
+for f in bin/targets/rockchip/armv8/*khadas*.img.gz bin/targets/rockchip/armv8/*.manifest; do
+	[ -f "$f" ] && cp -v "$f" "$OUT/$(name "$f")"
+done
+(cd "$OUT" && sha256sum -- *khadas_edge-v*.img.gz > sha256sums)
 
 # apk repository matching this kernel: kmods + target packages, khadas feed
-REPO="$OUT/apk-repo"
+REPO="$OUT/apk-repo$VSUFFIX"
 rm -rf "$REPO"
 mkdir -p "$REPO/targets" "$REPO/khadas"
 cp -a bin/targets/rockchip/armv8/packages/. "$REPO/targets/"

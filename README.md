@@ -27,7 +27,7 @@ Khadas Edge-V added as an OpenWrt device. Board specific files (dtb, dts, U-Boot
 + **Plug and play**: Ethernet is the uplink (DHCP), the board shows up in the home router as
   `khadas-edge`; web interface, SSH, Docker apps from the home network; HDMI console
   (boot loader + Linux, login with a USB keyboard) prints the addresses, see [First boot](#first-boot)
-+ **Onboard Wi-Fi works out of the box**: AP6356S (BCM4356A2) with the Khadas firmware + NVRAM,
++ **Onboard Wi-Fi works out of the box**: AMPAK AP6398S (BCM4359) with the Khadas firmware + NVRAM,
   access point `Khadas-Edge` / password `khadasedge` (WPA2, 2.4 GHz channel 6), LAN `192.168.77.1`
 + **Wi-Fi 6 / 6E / 7 (AX / BE)** PCIe M.2 and USB cards, each card gets an access point automatically
   + Intel AX200, AX210, BE200 (`iwlwifi`) - access point on 2.4 GHz (Intel firmware blocks AP on 5 / 6 GHz)
@@ -61,6 +61,7 @@ with all images (the firmware selector reads the releases):
 | device | file | build |
 |---|---|---|
 | Khadas Edge-V | `openwrt-25.12.5-rockchip-armv8-khadas_edge-v-squashfs-sysupgrade.img.gz` | source build, ~2 h |
+| Khadas Edge-V + KVM | `openwrt-25.12.5-rockchip-armv8-khadas_edge-v-kvm-squashfs-sysupgrade.img.gz` | source build (`KVM=1`), ~2 h |
 | PC / server x86_64 | `openwrt-25.12.5-x86-64-pc-efi.img.gz` (UEFI + BIOS), `…-pc-bios.img.gz` | ImageBuilder, ~15 min |
 | virtual machine x86_64 | `openwrt-25.12.5-x86-64-vm.qcow2` (Proxmox / QEMU), `.vmdk` (VMware), `.vdi` (VirtualBox), `.vhdx` (Hyper-V), `.img.gz` | ImageBuilder |
 | 32-bit PC, Pentium 4 and newer | `openwrt-25.12.5-i386-pc-bios.img.gz` | ImageBuilder |
@@ -71,7 +72,9 @@ with all images (the firmware selector reads the releases):
 | Raspberry Pi Zero / Zero W | `openwrt-25.12.5-rpi-zero-factory.img.gz`, `-sysupgrade` | ImageBuilder |
 | Raspberry Pi Zero 2 W | `openwrt-25.12.5-rpi-zero2-factory.img.gz`, `-sysupgrade` | ImageBuilder |
 
-**Edge-V: full or official kernel.** The full image (source build) has the HDMI console and the root
+**Edge-V: three variants.** `edge-v-kvm` = the full image + virtual machines on the board
+(KVM kernel, QEMU, `Services → Virtual Machines`: arm64 guests with UEFI, virtio, VNC).
+**Full or official kernel.** The full image (source build) has the HDMI console and the root
 file system on a USB SSD, its kernel differs from the official one, so kmods come from this project's
 repository. `edge-v-official` uses the official rockchip kernel (Edge-V dtb + U-Boot added by the
 ImageBuilder job): no HDMI console after U-Boot, no root on USB (the SSD works as a data disk),
@@ -113,7 +116,7 @@ OW_REL=v25.12.5 JOBS=8 ./openwrt/build.sh
 + [openwrt/feed](openwrt/feed) - own packages:
   `luci-app-zt-gateway` (ZeroTier gateway), `luci-app-docker-apps`
   (one click Docker apps), `khadas-storage` + `luci-app-khadas-storage` (install to disk, expand root),
-  `khadas-wifi-autoconf` (Wi-Fi AP setup), `khadas-edge-wifi-firmware` (AP6356S firmware),
+  `khadas-wifi-autoconf` (Wi-Fi AP setup), `khadas-edge-wifi-firmware` (AP6398S firmware),
   `khadas-edge-display` (HDMI console: `kmod-drm-rockchip`, `khadas-edge-console`)
 + [openwrt/files](openwrt/files) - rootfs overlay
 
@@ -226,7 +229,7 @@ appears), settings in `/etc/config/wifiauto`:
 
 The band / channel / HT mode are taken from what the driver reports for AP mode: channels
 marked no-IR / radar / disabled are skipped, cards without AP support are left unchanged.
-Onboard AP6356S uses 2.4 GHz by default (its firmware country code marks 5 GHz as passive),
+Onboard AP6398S uses 2.4 GHz by default (the most compatible setting for its firmware country code),
 Intel cards always use 2.4 GHz. Everything can be changed in `Network → Wireless`.
 
 ```
