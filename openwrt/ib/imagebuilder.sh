@@ -117,8 +117,11 @@ inject_board() {
 
 	# boot loader like binman's u-boot-rockchip.bin: idbloader at sector 64,
 	# u-boot.itb at sector 16384 (the image recipe writes it at sector 64)
-	mkdir -p "$IB/staging_dir/image"
-	tmp="$IB/staging_dir/image/$UBOOT-u-boot-rockchip.bin"
+	local idir
+	idir=$(ls -d "$IB"/staging_dir/target-*/image 2>/dev/null | head -n 1)
+	[ -n "$idir" ] || idir=$(ls -d "$IB"/staging_dir/target-* | head -n 1)/image
+	mkdir -p "$idir"
+	tmp="$idir/$UBOOT-u-boot-rockchip.bin"
 	dd if="$dir/u-boot/idbloader.img" of="$tmp" 2>/dev/null
 	dd if="$dir/u-boot/u-boot.itb" of="$tmp" seek=$((16384 - 64)) conv=notrunc 2>/dev/null
 
@@ -253,6 +256,7 @@ case "$VARIANT" in
 		f=$(pick squashfs-factory.img.gz)
 		[ -n "$f" ] && cp "$f" "$DEST/$name-factory.img.gz"
 		f=$(pick squashfs-sysupgrade.img.gz)
+		[ -n "$f" ] || f=$(pick squashfs-sdcard.img.gz)	# sunxi: SD image = sysupgrade
 		[ -n "$f" ] || die "no sysupgrade image in $BIN"
 		cp "$f" "$DEST/$name-sysupgrade.img.gz"
 		;;
