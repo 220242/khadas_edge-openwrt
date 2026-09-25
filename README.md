@@ -7,7 +7,8 @@ Branch `nokvm`: no KVM / QEMU virtual machine manager on the board (VMs belong t
 x86 images with the official OpenWrt kernel.
 
 **Firmware selector**: [selector/](selector/index.html) - on GitHub Pages
-(`https://<owner>.github.io/<repo>/`, Settings → Pages → Source: GitHub Actions), lists the
+(`https://<owner>.github.io/<repo>/`, Settings → Pages → Source: GitHub Actions, and
+Settings → Environments → github-pages → allow the `nokvm` branch; workflow `static.yml`), lists the
 images of the GitHub releases per device with install instructions.
 
 ![khadas vims openwrt](pics/khadas_vim_openwrt.jpg)
