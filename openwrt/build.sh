@@ -49,10 +49,14 @@ apply_patch() {
 }
 
 ## source
+# init + fetch instead of clone: $SRC may already hold dl/ (CI cache)
 if [ ! -d "$SRC/.git" ]; then
 	log "clone OpenWrt $OW_REL -> $SRC"
-	mkdir -p "$(dirname "$SRC")"
-	git clone --depth 1 --branch "$OW_REL" "$OW_GIT" "$SRC"
+	mkdir -p "$SRC"
+	git -C "$SRC" init -q
+	git -C "$SRC" remote add origin "$OW_GIT"
+	git -C "$SRC" fetch --depth 1 origin tag "$OW_REL"
+	git -C "$SRC" checkout -q "$OW_REL"
 fi
 
 cd "$SRC"
