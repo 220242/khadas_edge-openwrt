@@ -1,0 +1,274 @@
+#!/bin/sh
+# Firmware update from the GitHub releases of this project
+#
+#   khadas-fwupdate status          JSON: this image (variant, release, build date), job state
+#   khadas-fwupdate check           JSON: latest release, the image of this device in it, update or not
+#   khadas-fwupdate download        start: download the image of the last check, SHA256 + sysupgrade -T
+#   khadas-fwupdate job             JSON: download state, bytes, log
+#   khadas-fwupdate install KEEP    flash the verified image (KEEP: 1 keep settings, 0 factory defaults)
+#   khadas-fwupdate clean           remove the downloaded image
+#
+# /etc/khadas-release (written by openwrt/ib/imagebuilder.sh):
+#   VARIANT=edge-v  REPO=owner/name  TAG=v1.2 (empty: not a release build)  BUILD_DATE=2026-01-01T00:00:00Z
+
+. /usr/share/libubox/jshn.sh
+
+RELEASE_FILE=${FWU_RELEASE_FILE:-/etc/khadas-release}
+API=${FWU_API:-https://api.github.com}
+WORK=${FWU_WORK:-/tmp/khadas-fwupdate}
+SYSUPGRADE=${FWU_SYSUPGRADE:-/sbin/sysupgrade}
+EFI_DIR=${FWU_EFI_DIR:-/sys/firmware/efi}
+MOUNTS=${FWU_MOUNTS:-/proc/mounts}
+
+CHECK=$WORK/check.json
+IMAGE=$WORK/firmware.img.gz
+JOB_LOG=$WORK/job.log
+JOB_STATE=$WORK/job.state
+# version part of an image name: 25.12.5, 25.12.0-rc1, 24.10-SNAPSHOT
+VER='[0-9][0-9.]*(-rc[0-9]+|-SNAPSHOT)?'
+
+die() {
+	echo "ERROR: $*" >&2
+	exit 1
+}
+
+load_release() {
+	VARIANT='' REPO='' TAG='' BUILD_DATE=''
+	[ -f "$RELEASE_FILE" ] && . "$RELEASE_FILE"
+	REPO=${REPO:-220242/khadas_edge-openwrt}
+	[ -n "$VARIANT" ] && return 0
+	# own source build (openwrt/build.sh): no release file
+	case "$(cat /tmp/sysinfo/board_name 2>/dev/null)" in
+		khadas,edge-v)
+			VARIANT=edge-v
+			[ -x /usr/bin/qemu-system-aarch64 ] && VARIANT=edge-v-kvm
+			;;
+	esac
+}
+
+# extended regex of the sysupgrade image of this device in a release
+image_regex() {
+	case "$VARIANT" in
+		edge-v|edge-v-kvm)
+			# names of the source build (no version), squashfs or ext4 as running
+			local fs=ext4
+			grep -q ' /rom ' "$MOUNTS" && fs=squashfs
+			echo "^openwrt-($VER-)?rockchip-armv8-khadas_$VARIANT-$fs-sysupgrade\\.img\\.gz\$" ;;
+		x86-64-pc)
+			# the image of the running boot mode
+			if [ -d "$EFI_DIR" ]; then
+				echo "^openwrt-$VER-x86-64-pc-efi\\.img\\.gz\$"
+			else
+				echo "^openwrt-$VER-x86-64-pc-bios\\.img\\.gz\$"
+			fi
+			;;
+		x86-64-vm) echo "^openwrt-$VER-x86-64-vm\\.img\\.gz\$" ;;
+		i386-pc) echo "^openwrt-$VER-i386-pc-bios\\.img\\.gz\$" ;;
+		?*) echo "^openwrt-$VER-$VARIANT-sysupgrade\\.img\\.gz\$" ;;
+	esac
+}
+
+fetch() { # url file
+	curl -fsSL --retry 3 --connect-timeout 15 -H 'Accept: application/vnd.github+json' -o "$2" "$1"
+}
+
+# a > b for ISO 8601 UTC dates (2026-01-02T03:04:05Z)
+newer() {
+	[ -n "$1" ] && [ -n "$2" ] && awk -v a="$1" -v b="$2" 'BEGIN { exit !(a > b) }'
+}
+
+job_state() { cat "$JOB_STATE" 2>/dev/null; }
+
+sha256() { sha256sum "$1" 2>/dev/null | cut -d ' ' -f 1; }
+
+fsize() {
+	local n
+	n=$(wc -c < "$1" 2>/dev/null) || n=0
+	echo $((n))
+}
+
+add_release_info() {
+	json_add_string variant "$VARIANT"
+	json_add_string repo "$REPO"
+	json_add_string tag "$TAG"
+	json_add_string build_date "$BUILD_DATE"
+}
+
+check() {
+	local rel=$WORK/release.json name names url size tag published regex state
+
+	load_release
+	[ -n "$VARIANT" ] || die "unknown device variant: no $RELEASE_FILE"
+	regex=$(image_regex)
+	fetch "$API/repos/$REPO/releases/latest" "$rel.tmp" ||
+		die "can not read the latest release of https://github.com/$REPO"
+	mv "$rel.tmp" "$rel"
+
+	tag=$(jsonfilter -i "$rel" -e '@.tag_name')
+	[ -n "$tag" ] || die "no release in https://github.com/$REPO"
+	published=$(jsonfilter -i "$rel" -e '@.published_at')
+	names=$(jsonfilter -i "$rel" -e '@.assets[*].name')
+	name=$(echo "$names" | grep -E "$regex" | head -n 1)
+	if [ -n "$name" ]; then
+		url=$(jsonfilter -i "$rel" -e "@.assets[@.name='$name'].browser_download_url")
+		size=$(jsonfilter -i "$rel" -e "@.assets[@.name='$name'].size")
+	fi
+
+	# same tag: up to date; release build of another tag or own build:
+	# the newer of release date / build date
+	if [ -z "$name" ]; then
+		state=no-image
+	elif [ -n "$TAG" ] && [ "$tag" = "$TAG" ]; then
+		state=current
+	elif [ -z "$BUILD_DATE" ] || newer "$published" "$BUILD_DATE"; then
+		state=update
+	else
+		state=older
+	fi
+
+	json_init
+	add_release_info
+	json_add_object latest
+	json_add_string tag "$tag"
+	json_add_string name "$(jsonfilter -i "$rel" -e '@.name')"
+	json_add_string published "$published"
+	json_add_string html_url "$(jsonfilter -i "$rel" -e '@.html_url')"
+	json_add_string image "$name"
+	json_add_string url "$url"
+	json_add_int size "${size:-0}"
+	json_close_object
+	json_add_string state "$state"
+	json_add_string checked "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+	json_dump > "$CHECK"
+	cat "$CHECK"
+}
+
+download_run() {
+	local rel=$WORK/release.json name url size sums sum free need
+
+	json_load_file "$CHECK" || die "no update check"
+	json_select latest
+	json_get_var name image
+	json_get_var url url
+	json_get_var size size
+	json_select ..
+	[ -n "$name" ] && [ -n "$url" ] || die "no image for this device in the latest release"
+
+	free=$(df -k "$WORK" | awk 'NR == 2 { print $4 }')
+	need=$(( ${size:-0} / 1024 + 8192 ))
+	[ "${free:-0}" -ge "$need" ] ||
+		die "not enough space in $WORK: $((free / 1024)) MiB free, $((need / 1024)) MiB needed"
+
+	# the checksum of the release: SHA256SUMS (all images) or sha256sums-<variant>
+	for sums in SHA256SUMS "sha256sums-$VARIANT"; do
+		url=$(jsonfilter -i "$rel" -e "@.assets[@.name='$sums'].browser_download_url")
+		[ -n "$url" ] || continue
+		fetch "$url" "$WORK/sha256sums" || die "can not download $sums"
+		sum=$(awk -v n="$name" '{ f = $2; sub(/^\*/, "", f) } f == n { print $1; exit }' "$WORK/sha256sums")
+		[ -n "$sum" ] && break
+	done
+	[ -n "$sum" ] || die "no SHA256 of $name in the release"
+
+	url=$(jsonfilter -i "$rel" -e "@.assets[@.name='$name'].browser_download_url")
+	echo "download $name ($((size / 1048576)) MiB)"
+	rm -f "$IMAGE" "$IMAGE.part"
+	curl -fsSL --retry 3 --connect-timeout 15 -o "$IMAGE.part" "$url" || die "download failed"
+
+	echo "check SHA256"
+	[ "$(sha256 "$IMAGE.part")" = "$sum" ] ||
+		{ rm -f "$IMAGE.part"; die "SHA256 mismatch, image removed"; }
+	mv "$IMAGE.part" "$IMAGE"
+	echo "$sum" > "$IMAGE.sha256"
+	echo "$name" > "$IMAGE.name"
+
+	echo "check image (sysupgrade -T)"
+	"$SYSUPGRADE" -T "$IMAGE" || { rm -f "$IMAGE"; die "the image does not fit this device"; }
+	echo "ready: $name"
+}
+
+download() {
+	[ "$(job_state)" = running ] && die "a download is running"
+	[ -f "$CHECK" ] || die "check for an update first"
+	load_release
+	rm -f "$IMAGE" "$IMAGE.sha256" "$IMAGE.name"
+	echo running > "$JOB_STATE"
+	: > "$JOB_LOG"
+	(
+		# die exits: own subshell
+		if (download_run) >> "$JOB_LOG" 2>&1; then
+			echo "done" > "$JOB_STATE"
+		else
+			rm -f "$IMAGE.part"
+			echo failed > "$JOB_STATE"
+		fi
+	) </dev/null >/dev/null 2>&1 &
+	echo '{"result":"started"}'
+}
+
+job() {
+	local size=0
+
+	[ -f "$CHECK" ] && size=$(jsonfilter -i "$CHECK" -e '@.latest.size')
+	json_init
+	json_add_string state "$(job_state)"
+	json_add_string log "$(cat "$JOB_LOG" 2>/dev/null)"
+	json_add_int size "${size:-0}"
+	if [ -f "$IMAGE.part" ]; then
+		json_add_int bytes "$(fsize "$IMAGE.part")"
+	else
+		json_add_int bytes "$(fsize "$IMAGE")"
+	fi
+	json_add_string image "$(cat "$IMAGE.name" 2>/dev/null)"
+	json_add_boolean ready "$([ -f "$IMAGE" ] && [ "$(job_state)" = "done" ] && echo 1 || echo 0)"
+	json_dump
+}
+
+status() {
+	load_release
+	json_init
+	add_release_info
+	json_add_string image_regex "$(image_regex)"
+	json_add_string job_state "$(job_state)"
+	json_dump
+}
+
+install() {
+	local sum keep=$1
+
+	case "$keep" in 0|1) ;; *) die "KEEP: 0 or 1" ;; esac
+	[ "$(job_state)" = "done" ] && [ -f "$IMAGE" ] || die "no verified image, download it first"
+	sum=$(cat "$IMAGE.sha256" 2>/dev/null)
+	[ -n "$sum" ] && [ "$(sha256 "$IMAGE")" = "$sum" ] || die "the image changed after the check, download it again"
+	# sysupgrade stops every service (rpcd too): answer first
+	(
+		sleep 2
+		if [ "$keep" = 1 ]; then
+			exec "$SYSUPGRADE" "$IMAGE"
+		else
+			exec "$SYSUPGRADE" -n "$IMAGE"
+		fi
+	) </dev/null >/dev/null 2>&1 &
+	echo '{"result":"flashing"}'
+}
+
+clean() {
+	[ "$(job_state)" = running ] && die "a download is running"
+	rm -f "$IMAGE" "$IMAGE.part" "$IMAGE.sha256" "$IMAGE.name" "$JOB_STATE" "$JOB_LOG"
+	echo '{"result":"removed"}'
+}
+
+mkdir -p "$WORK"
+
+case "$1" in
+	status) status ;;
+	check) check ;;
+	download) download ;;
+	download-run) load_release; download_run ;;	# foreground, for tests
+	job) job ;;
+	install) install "$2" ;;
+	clean) clean ;;
+	*)
+		echo "usage: $0 status|check|download|job|install KEEP|clean" >&2
+		exit 1
+		;;
+esac
