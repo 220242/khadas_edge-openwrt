@@ -23,7 +23,7 @@
 ##   rpi-zero2       Raspberry Pi Zero 2 W
 ##
 ## ENV
-##   OW_VER=25.12.5      OpenWrt release
+##   OW_VER=             OpenWrt release (default: openwrt/version)
 ##   FEED_OUT=out/feed   own feed packages (.apk, from sdk-feed.sh)
 ##   OUT=out             images go to $OUT/VARIANT
 ##   WORK=build/ib       ImageBuilders / downloads
@@ -298,7 +298,7 @@ pick() { ls "$BIN"/*"$1" 2>/dev/null | head -n 1 || true; }
 
 case "$VARIANT" in
 	edge-v|edge-v-kvm)
-		# names of the source build: openwrt-25.12.5-rockchip-armv8-khadas_edge-v[-kvm]-...
+		# names of the source build: openwrt-<version>-rockchip-armv8-khadas_edge-v[-kvm]-...
 		for f in "$BIN"/*khadas_edge-v*.img.gz "$BIN"/*khadas_edge-v*.manifest; do
 			[ -f "$f" ] || continue
 			b=$(basename "$f")

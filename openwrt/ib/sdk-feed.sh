@@ -4,7 +4,7 @@
 ## ImageBuilder images of every target.
 ##
 ## ENV
-##   OW_VER=25.12.5     OpenWrt release
+##   OW_VER=            OpenWrt release (default: openwrt/version)
 ##   FEED_OUT=out/feed  where the .apk files go
 ##   WORK=build/ib      SDK / downloads
 

@@ -1,9 +1,9 @@
 # shellcheck shell=bash
 # helpers for the official OpenWrt SDK / ImageBuilder (sourced)
 
-OW_VER=${OW_VER:-25.12.5}
 OW_MIRROR=${OW_MIRROR:-https://downloads.openwrt.org}
 IB_TOP=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)	# openwrt/
+OW_VER=${OW_VER:-$(cat "$IB_TOP/version")}	# OpenWrt release: openwrt/version
 IB_ROOT=$(cd "$IB_TOP/.." && pwd)
 WORK=${WORK:-$IB_ROOT/build/ib}
 DL=${DL:-$WORK/dl}
