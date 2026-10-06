@@ -1,5 +1,14 @@
 # OpenWrt Khadas Change log
 
+## Boot test of the x86 images
+
++ `openwrt/ib/boot-test.sh`: the image boots in QEMU as a VM with one network port in a home
+  network and is checked: SSH and LuCI login with the default password (a wrong one refused),
+  eth0 is the DHCP uplink and gets an address, every first boot script ran, home network firewall
+  rule, dropbear / uhttpd / rpcd, dockerd + Docker zone, the Internet, no kernel oops
++ CI job `boot-test` (KVM): x86-64-vm (qcow2, BIOS + UEFI), x86-64-pc (BIOS + UEFI images),
+  i386-pc; a `v*` release waits for it, console logs are kept as artifacts
+
 ## Edge-V Wi-Fi fix, KVM variant back
 
 + onboard Wi-Fi did not start: the module is AMPAK **AP6398S (BCM4359)** (Khadas fenix: "AP6398S only

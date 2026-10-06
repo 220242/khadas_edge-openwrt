@@ -259,9 +259,53 @@ jobs:
           name: openwrt-${{ env.OW_VER }}-${{ matrix.variant }}
           path: out/${{ matrix.variant }}/*
 
+  # x86 images booted in QEMU (KVM): SSH / LuCI with the default password,
+  # DHCP uplink, first boot scripts, services; a failed boot stops the release
+  boot-test:
+    needs: ib
+    if: github.event_name != 'workflow_dispatch' || inputs.targets != 'edge-v'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { variant: x86-64-vm, image: x86-64-vm.qcow2, fw: bios }
+          - { variant: x86-64-vm, image: x86-64-vm.qcow2, fw: uefi }
+          - { variant: x86-64-pc, image: x86-64-pc-bios.img.gz, fw: bios }
+          - { variant: x86-64-pc, image: x86-64-pc-efi.img.gz, fw: uefi }
+          - { variant: i386-pc, image: i386-pc-bios.img.gz, fw: bios }
+    env:
+      OW_VER: '25.12.5'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils ovmf sshpass
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' |
+            sudo tee /etc/udev/rules.d/99-kvm.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: openwrt-${{ env.OW_VER }}-${{ matrix.variant }}
+          path: img
+
+      - name: boot ${{ matrix.image }} (${{ matrix.fw }})
+        run: ./openwrt/ib/boot-test.sh img/openwrt-$OW_VER-${{ matrix.image }} ${{ matrix.fw }}
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: boot-test-${{ matrix.variant }}-${{ matrix.fw }}
+          path: out/boot-test/
+
   # tag v*: one release with every image, the firmware selector reads it
   release:
-    needs: [ ib, ib-edge-v ]
+    needs: [ ib, ib-edge-v, boot-test ]
     if: always() && startsWith(github.ref, 'refs/tags/v') && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-24.04
     steps:
