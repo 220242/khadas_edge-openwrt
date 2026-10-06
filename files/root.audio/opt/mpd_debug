@@ -1,5 +1,0 @@
-#!/bin/sh
-
-## hyphop ##
-
-mpd --no-daemon --stderr -v 

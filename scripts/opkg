@@ -1,7 +1,0 @@
-#!/bin/sh
-
-## hyphop ##
-
-#= opkg wrapper (compat) -> scripts/pkg (apk or opkg)
-
-exec "$(dirname $0)/pkg" "$@"

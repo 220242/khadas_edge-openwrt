@@ -1,5 +1,0 @@
-#!/bin/sh
-
-## hyphop ##
-
-zcat "$2" | grep "$1"

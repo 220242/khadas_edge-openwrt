@@ -1,9 +1,0 @@
-#!/bin/sh
-
-## hyphop ##
-
-
-[ "$IFACE" ] || IFACE=$1
-
-ifstatus $IFACE | jsonfilter -e '@.uptime'
-

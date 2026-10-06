@@ -1,4 +1,0 @@
-# <file system> <mount point> <type> <options> <dump> <pass>
-
-## boot partition
-LABEL=OW_BOOT   /boot           auto    ro      0       0

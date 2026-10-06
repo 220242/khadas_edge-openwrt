@@ -1,8 +1,0 @@
-#!/bin/sh
-
-## hyphop ##
-
-## display thermal zone values
-
-grep "" /sys/class/thermal/thermal_zone?/temp
-

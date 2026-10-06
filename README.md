@@ -12,7 +12,7 @@ all images but the full Edge-V one with the official OpenWrt kernel (official km
 Settings → Environments → github-pages → allow the `nokvm` branch; workflow `static.yml`), lists the
 images of the GitHub releases per device with install instructions.
 
-![khadas vims openwrt](pics/khadas_vim_openwrt.jpg)
+![khadas edge openwrt](pics/khadas_vim_openwrt.jpg)
 
 ## Change logs
 
@@ -281,11 +281,6 @@ wifi-autoconf --force     # configure all radios again
 Clients: install ZeroTier, join the network ID, enable **Allow Default Route Override**
 (Windows / macOS: "Route all traffic through ZeroTier", Android / iOS: "Route via ZeroTier").
 The device NATs ZeroTier clients to its internet uplink (`wan`: Ethernet, 5G modem, Wi-Fi client).
-
-## Legacy build
-
-`scripts/build` - old repack build (Khadas 5.14 kernel + OpenWrt armsr userspace),
-no AX / BE Wi-Fi drivers in that kernel.
 
 ## related projects
 
