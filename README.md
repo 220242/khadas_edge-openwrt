@@ -82,8 +82,12 @@ with all images (the firmware selector reads the releases):
 **Full or official kernel.** The full image (source build) has the HDMI console and the root
 file system on a USB SSD, its kernel differs from the official one, so kmods come from this project's
 repository. `edge-v-official` uses the official rockchip kernel (Edge-V dtb + U-Boot added by the
-ImageBuilder job): no HDMI console after U-Boot, no root on USB (the SSD works as a data disk),
-`apk add kmod-…` from downloads.openwrt.org.
+ImageBuilder job) and has the HDMI console and the root on a USB SSD / NVMe too: the official
+kernel has DRM, fbdev emulation, USB storage and NVMe, only the Rockchip display driver
+(VOP + DW HDMI) is missing, so `kmod-drm-rockchip` is built from the kernel sources of the same
+release as external modules with the official SDK ([openwrt/feed-official](openwrt/feed-official),
+[openwrt/ib/sdk-board.sh](openwrt/ib/sdk-board.sh)). USB SSDs run in BOT mode (no UAS before
+the root is mounted), `apk add kmod-…` from downloads.openwrt.org.
 
 **Own kernels: [khadas-kernels](https://github.com/220242/khadas-kernels).** The Edge-V kernels
 (HDMI + USB SSD, KVM) are built from source only when something they depend on changes
@@ -140,6 +144,8 @@ still override it for a local build.
   `luci-app-khadas-fwupdate` (firmware update from the releases),
   `khadas-wifi-autoconf` (Wi-Fi AP setup), `khadas-edge-wifi-firmware` (AP6398S firmware),
   `khadas-edge-display` (HDMI console: `kmod-drm-rockchip`, `khadas-edge-console`)
++ [openwrt/feed-official](openwrt/feed-official) - `kmod-drm-rockchip` + `khadas-edge-console`
+  for the official kernel (`edge-v-official`, built by `openwrt/ib/sdk-board.sh`)
 + [openwrt/files](openwrt/files) - rootfs overlay
 
 ## Build on Windows 11
@@ -220,7 +226,8 @@ is ignored while the eMMC still has its boot loader.
   boot loader stays there. With this option the boot script on the eMMC / SD card starts OpenWrt from an
   NVMe or USB disk when one is connected (`nvme 0`, `usb 0..3`), otherwise OpenWrt on the eMMC / SD card.
   Typical setup: flash the image to the SD card or eMMC, boot, install to the USB SSD with
-  "Boot from this disk", reboot. The kernel has USB storage, UAS and NVMe built in (root on USB / NVMe).
+  "Boot from this disk", reboot. The kernel has USB storage, UAS and NVMe built in (root on USB / NVMe);
+  `edge-v-official`: USB storage and NVMe built in, UAS is a module, so the root SSD runs in BOT mode.
 + **Expand root to the whole disk**: grows the root partition, the overlay filesystem (f2fs / ext4) is
   resized on the next boot before it is mounted. Docker images can use the whole disk.
 
