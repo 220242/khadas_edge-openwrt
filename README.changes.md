@@ -12,6 +12,21 @@
   and boot from it; the official kernel has USB storage and NVMe built in (UAS only as a module:
   the root SSD runs in BOT mode)
 
+## OpenWrt version in one file
+
++ `openwrt/version` holds the OpenWrt release (`25.12.5`); `build.sh`, `kernel-key.sh`,
+  `ib/common.sh` and every CI job read it (was written in 5 places of `build.yml` and 4 scripts)
++ `openwrt/set-version.sh 25.12.6`: next release in one command, README file names included
+  (a new series also renames "OpenWrt 25.12" in the docs, the selector and the Windows script)
++ kernel keys stay the same: no Edge-V kernel rebuild for this change
+
+## Release notes from this change log
+
++ a `v*` release gets its description from this file: the sections added since the previous
+  release tag (`openwrt/release-notes.sh`), plus where to get the images
++ firmware selector: "What's new in <release>" above the device list, the release description
+  of the selected release
+
 ## Firmware update from the releases
 
 + `luci-app-khadas-fwupdate` in every image, `System → Firmware Update`: latest GitHub release,

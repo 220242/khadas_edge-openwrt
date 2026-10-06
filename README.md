@@ -10,7 +10,10 @@ all images but the full Edge-V one with the official OpenWrt kernel (official km
 **Firmware selector**: [selector/](selector/index.html) - on GitHub Pages
 (`https://<owner>.github.io/<repo>/`, Settings → Pages → Source: GitHub Actions, and
 Settings → Environments → github-pages → allow the `nokvm` branch; workflow `static.yml`), lists the
-images of the GitHub releases per device with install instructions.
+images of the GitHub releases per device with install instructions and what is new in each release.
+Release notes come from [README.changes.md](README.changes.md): new changes go on top as a
+`## Title` section, a release lists the sections added since the previous tag
+(`./openwrt/release-notes.sh` prints them).
 
 ![khadas edge openwrt](pics/khadas_vim_openwrt.jpg)
 
@@ -123,6 +126,12 @@ cd khadas_edge-openwrt
 
 OW_REL=v25.12.5 JOBS=8 ./openwrt/build.sh
 ```
+
+**OpenWrt version**: one file, [openwrt/version](openwrt/version) (`25.12.5`); `build.sh`,
+`kernel-key.sh`, `ib/*.sh` and the CI read it. Next release:
+`./openwrt/set-version.sh 25.12.6` (also updates the file names in this README), commit, push:
+the CI builds the new Edge-V kernels and every image. `OW_REL` / `OW_VER` in the environment
+still override it for a local build.
 
 + [openwrt/patches](openwrt/patches) - Khadas Edge-V device (U-Boot with HDMI), USB UAS built in
 + [openwrt/ib](openwrt/ib) - x86 images: `sdk-feed.sh` (own packages with the official SDK),
