@@ -78,11 +78,13 @@ case "$IMAGE" in
 	*) disk="file=$(realpath "$IMAGE"),format=raw,snapshot=on" ;;
 esac
 
-args=(-m 1024 -smp 2 -nographic -monitor none -serial "file:$CONSOLE"
+args=(-m 1024 -smp 2 -nographic -monitor none -serial "file:$CONSOLE" -no-reboot
 	-drive "$disk,if=virtio"
 	-nic "user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:$SSH_PORT-:22,hostfwd=tcp:127.0.0.1:$HTTPS_PORT-:443")
 if [ -w /dev/kvm ]; then
-	args+=(-enable-kvm -cpu host)
+	# i386: a 32-bit CPU model, the 32-bit kernel on "host" (64-bit EPYC) panics
+	if [ "$QEMU" = qemu-system-i386 ]; then cpu=kvm32; else cpu=host; fi
+	args+=(-enable-kvm -cpu "$cpu")
 else
 	log "no /dev/kvm: emulation, the boot is slow"
 	# default CPU model: "max" crashes OVMF and warns on i386 SMP under TCG
@@ -111,7 +113,7 @@ run() { "${SSH[@]}" "$@" </dev/null; }
 start=$SECONDS
 until run true 2>/dev/null; do
 	kill -0 "$QPID" 2>/dev/null || { cat "$WORK/qemu.out" >&2; tail -n 50 "$CONSOLE" >&2; die "QEMU exited"; }
-	grep -qE 'Kernel panic|end Kernel panic' "$CONSOLE" && { tail -n 50 "$CONSOLE" >&2; die "kernel panic"; }
+	grep -q 'Kernel panic' "$CONSOLE" && { grep -a -B 40 -m 1 'Kernel panic' "$CONSOLE" >&2; die "kernel panic"; }
 	[ $((SECONDS - start)) -lt "$TIMEOUT" ] || { tail -n 50 "$CONSOLE" >&2; die "no SSH login after $TIMEOUT s"; }
 	sleep 5
 done
