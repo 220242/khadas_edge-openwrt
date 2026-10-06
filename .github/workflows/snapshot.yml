@@ -73,14 +73,15 @@ jobs:
           name: snapshot-feed-packages
           path: out/feed
 
-      # HDMI kmod (external modules of the snapshot kernel) + storage
-      # packages, snapshot rockchip SDK, as in build.yml
+      # storage packages with the snapshot rockchip SDK; no HDMI console:
+      # the snapshot kernel (6.18) has no DRM fbdev emulation / framebuffer
+      # console, the Rockchip DRM kmod of feed-official is for 25.12
       - name: board packages
         if: matrix.variant == 'edge-v-official'
-        run: ./openwrt/ib/sdk-board.sh
+        run: EDGE_HDMI=0 ./openwrt/ib/sdk-board.sh
 
       - name: build ${{ matrix.variant }}
-        run: ./openwrt/ib/imagebuilder.sh ${{ matrix.variant }}
+        run: EDGE_HDMI=0 ./openwrt/ib/imagebuilder.sh ${{ matrix.variant }}
 
       - name: snapshot revision
         run: |

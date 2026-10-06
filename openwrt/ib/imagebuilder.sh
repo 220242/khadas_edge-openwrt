@@ -117,6 +117,8 @@ inject_board() {
 	local dir="$IB_ROOT/boards/$1"
 	local DEVICE SOC LOADADDR VENDOR MODEL DTB UBOOT PACKAGES BOOTSCRIPT=
 	. "$dir/board.conf"
+	# EDGE_HDMI=0: no HDMI console package (sdk-board.sh did not build it)
+	[ "${EDGE_HDMI:-1}" = 1 ] || PACKAGES=$(echo " $PACKAGES " | sed 's/ khadas-edge-console / /')
 	local mk="$IB/target/linux/$T/image/$S.mk"
 	local kdir kver tmp script=
 

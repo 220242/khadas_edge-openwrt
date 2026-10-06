@@ -7,8 +7,9 @@
   downloads.openwrt.org/snapshots), every Monday and by hand (Actions → snapshot → Run workflow)
 + workflow artifacts `openwrt-SNAPSHOT-<variant>` (30 days), no release / tag; the stable
   25.12 builds stay as they are
-+ edge-v-official with the HDMI kmod and storage packages built by the snapshot rockchip SDK
-  (`sdk-board.sh`); edge-v / edge-v-kvm (own source built kernel) are stable only
++ snapshot edge-v-official: storage packages (`EDGE_HDMI=0 sdk-board.sh`), no HDMI console: the
+  snapshot kernel (6.18) has no DRM fbdev emulation and framebuffer console;
+  edge-v / edge-v-kvm (own source built kernel) are stable only
 + `OW_VER=SNAPSHOT ./openwrt/ib/imagebuilder.sh <variant>` builds one locally
 
 ## edge-v-official: HDMI console, root on a USB SSD
