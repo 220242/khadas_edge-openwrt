@@ -10,7 +10,10 @@ all images but the full Edge-V one with the official OpenWrt kernel (official km
 **Firmware selector**: [selector/](selector/index.html) - on GitHub Pages
 (`https://<owner>.github.io/<repo>/`, Settings → Pages → Source: GitHub Actions, and
 Settings → Environments → github-pages → allow the `nokvm` branch; workflow `static.yml`), lists the
-images of the GitHub releases per device with install instructions.
+images of the GitHub releases per device with install instructions and what is new in each release.
+Release notes come from [README.changes.md](README.changes.md): new changes go on top as a
+`## Title` section, a release lists the sections added since the previous tag
+(`./openwrt/release-notes.sh` prints them).
 
 ![khadas edge openwrt](pics/khadas_vim_openwrt.jpg)
 

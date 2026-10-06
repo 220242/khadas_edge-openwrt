@@ -1,5 +1,12 @@
 # OpenWrt Khadas Change log
 
+## Release notes from this change log
+
++ a `v*` release gets its description from this file: the sections added since the previous
+  release tag (`openwrt/release-notes.sh`), plus where to get the images
++ firmware selector: "What's new in <release>" above the device list, the release description
+  of the selected release
+
 ## Cleanup: 2021 repack build removed
 
 + removed the old repack build (`scripts/`, `project/`, `files/`, `README.openwrt.vims.md`):

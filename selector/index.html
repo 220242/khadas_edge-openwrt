@@ -72,6 +72,14 @@ pre {
 .warn { color: var(--warn); }
 .empty { color: var(--muted); padding: 8px 0; }
 a { color: var(--accent); }
+.notes { margin-top: 0; }
+.notes summary { cursor: pointer; font-weight: 600; }
+.notes .md h2 { font-size: 16px; margin: 14px 0 4px; }
+.notes .md h3 { font-size: 15px; margin: 12px 0 4px; }
+.notes .md ul { padding-left: 20px; margin: 4px 0; }
+.notes .md li { margin: 3px 0; }
+.notes .md code { background: var(--code); border-radius: 4px; padding: 0 4px; font-size: 13px; }
+.notes .md pre code { padding: 0; }
 footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
 </style>
 </head>
@@ -89,7 +97,8 @@ footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
 	</header>
 	<p class="sub" data-t="subtitle">OpenWrt 25.12: Khadas Edge-V, NanoPi, Orange Pi, Raspberry Pi Zero, ПК x86_64, виртуальные машины, 32-битные ПК. Выберите устройство.</p>
 
-	<div class="grid" id="devices"></div>
+	<div id="notes"></div>
+	<div class="grid" id="devices" style="margin-top:16px"></div>
 	<div id="out"></div>
 
 	<footer>
@@ -113,6 +122,7 @@ const T = {
 		pre: 'предварительный', latest: 'последний', first: 'Первый вход',
 		firstText: 'Веб-интерфейс: адрес из роутера (имя устройства: khadas-edge, nanopi-r5c, rpi-zero, openwrt-pc…) или http://имя.local/. Пользователь root, пароль khadasedge — смените его. С одним сетевым портом он получает адрес по DHCP; с двумя: eth0 = LAN 192.168.1.1, eth1 = WAN.',
 		sha: 'SHA256', manifest: 'Список пакетов',
+		notes: 'Что нового в', nonotes: 'Описания у этого релиза нет.', onGithub: 'релиз на GitHub',
 	},
 	en: {
 		title: 'OpenWrt firmware selector', release: 'Release',
@@ -124,6 +134,7 @@ const T = {
 		pre: 'pre-release', latest: 'latest', first: 'First login',
 		firstText: 'Web interface: the address from your router (device name: khadas-edge, nanopi-r5c, rpi-zero, openwrt-pc…) or http://name.local/. User root, password khadasedge — change it. With one network port it gets its address by DHCP; with two: eth0 = LAN 192.168.1.1, eth1 = WAN.',
 		sha: 'SHA256', manifest: 'Package list',
+		notes: "What's new in", nonotes: 'This release has no description.', onGithub: 'release on GitHub',
 	},
 };
 
@@ -474,7 +485,24 @@ function renderOut() {
 	out.append(p);
 }
 
-function render() { renderStatic(); renderReleases(); renderDevices(); renderOut(); }
+// release notes: the release description as GitHub renders (and sanitizes)
+// it, body_html of the API; the change log since the previous release
+function renderNotes() {
+	const box = document.getElementById('notes');
+	box.innerHTML = '';
+	const r = state.rel;
+	if (!r) return;
+	const open = load('notes') !== 'closed';
+	const d = el('details', { class: 'panel notes' },
+		el('summary', {}, t('notes') + ' ' + (r.name || r.tag_name)),
+		r.body_html ? el('div', { class: 'md', html: r.body_html }) : el('p', { class: 'empty' }, t('nonotes')),
+		el('div', { class: 'note' }, el('a', { href: r.html_url }, t('onGithub'))));
+	d.open = open;
+	d.addEventListener('toggle', () => store('notes', d.open ? 'open' : 'closed'));
+	box.append(d);
+}
+
+function render() { renderStatic(); renderReleases(); renderNotes(); renderDevices(); renderOut(); }
 
 async function repoName() {
 	const q = new URLSearchParams(location.search).get('repo');
@@ -506,12 +534,12 @@ async function init() {
 		document.documentElement.dataset.theme = next; store('theme', next);
 	};
 	document.getElementById('rel').onchange = e => {
-		state.rel = state.releases.find(r => String(r.id) === e.target.value); renderOut();
+		state.rel = state.releases.find(r => String(r.id) === e.target.value); renderNotes(); renderOut();
 	};
 
 	try {
 		const r = await fetch('https://api.github.com/repos/' + state.repo + '/releases?per_page=30',
-			{ headers: { Accept: 'application/vnd.github+json' } });
+			{ headers: { Accept: 'application/vnd.github.full+json' } });	// + body_html
 		if (!r.ok) throw new Error('HTTP ' + r.status);
 		state.releases = (await r.json()).filter(x => !x.draft && x.assets.length);
 		state.rel = state.releases.find(x => !x.prerelease) || state.releases[0] || null;
