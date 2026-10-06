@@ -259,8 +259,17 @@ chmod +x "$FILES/etc/uci-defaults/"*
 log "$VARIANT: $T/$S $PROFILE, packages:$pkgs"
 BIN=$WORK/bin-$VARIANT
 rm -rf "$BIN"
-make -C "$IB" image PROFILE="$PROFILE" PACKAGES="$pkgs" FILES="$FILES" \
-	${SIZE:+ROOTFS_PARTSIZE="$SIZE"} BIN_DIR="$BIN"
+# downloads.openwrt.org sometimes cuts a package download ("ADB integrity
+# error", "unexpected end of file"): apk then fails the whole image; the
+# packages already fetched stay in the ImageBuilder cache, so retry
+for try in 1 2 3; do
+	make -C "$IB" image PROFILE="$PROFILE" PACKAGES="$pkgs" FILES="$FILES" \
+		${SIZE:+ROOTFS_PARTSIZE="$SIZE"} BIN_DIR="$BIN" && break
+	[ "$try" -lt 3 ] || die "make image failed 3 times"
+	log "make image failed (try $try), retry in 30 s"
+	rm -rf "$BIN"
+	sleep 30
+done
 
 if [ "$KERNEL" = edge-v-kvm ]; then
 	# the QEMU of the kernel repository (edk2 UEFI), not the official one
