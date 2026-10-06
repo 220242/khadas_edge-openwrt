@@ -1,8 +1,0 @@
-#!/bin/sh
-
-## hyphop ##
-
-mpc clear
-mpc --wait update
-mpc ls | mpc add
-mpc play

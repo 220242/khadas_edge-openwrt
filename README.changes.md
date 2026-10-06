@@ -9,6 +9,13 @@
 + CI job `boot-test` (KVM): x86-64-vm (qcow2, BIOS + UEFI), x86-64-pc (BIOS + UEFI images),
   i386-pc; a `v*` release waits for it, console logs are kept as artifacts
 
+## Cleanup: 2021 repack build removed
+
++ removed the old repack build (`scripts/`, `project/`, `files/`, `README.openwrt.vims.md`):
+  Khadas 5.14 kernel + OpenWrt userspace for the VIMs, superseded by the source build
+  (`openwrt/build.sh`) and the ImageBuilder images; it stays in the git history
+  (tag `v25.12.5-1` and earlier)
+
 ## Edge-V Wi-Fi fix, KVM variant back
 
 + onboard Wi-Fi did not start: the module is AMPAK **AP6398S (BCM4359)** (Khadas fenix: "AP6398S only

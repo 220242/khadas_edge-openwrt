@@ -1,8 +1,0 @@
-#!/bin/sh
-
-## hyphop ##
-
-#= prepare for build
-
-sudo apt-get install curl wget rsync util-linux u-boot-tools mtools squashfs-tools e2fsprogs dosfstools
-

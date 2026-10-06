@@ -1,9 +1,0 @@
-#!/bin/sh
-
-## hyphop ##
-
-modprobe pwm_meson
-modprobe leds-pwm
-
-
-
