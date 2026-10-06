@@ -9,6 +9,12 @@
 + CI job `boot-test` (KVM): x86-64-vm (qcow2, BIOS + UEFI), x86-64-pc (BIOS + UEFI images),
   i386-pc; a `v*` release waits for it, console logs are kept as artifacts
 
+## Firmware update from the releases
+
++ `luci-app-khadas-fwupdate` in every image, `System → Firmware Update`: latest GitHub release,
+  the image of this device (variant from `/etc/khadas-release`, Edge-V squashfs / ext4, x86 UEFI / BIOS),
+  download with SHA256 check against `SHA256SUMS` + `sysupgrade -T`, flash keeping the settings or not
+
 ## Cleanup: 2021 repack build removed
 
 + removed the old repack build (`scripts/`, `project/`, `files/`, `README.openwrt.vims.md`):

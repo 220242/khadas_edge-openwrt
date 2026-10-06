@@ -1,0 +1,20 @@
+{
+	"luci-app-khadas-fwupdate": {
+		"description": "Grant access to the firmware update from the project releases",
+		"read": {
+			"file": {
+				"/usr/libexec/khadas-fwupdate status": [ "exec" ],
+				"/usr/libexec/khadas-fwupdate job": [ "exec" ]
+			}
+		},
+		"write": {
+			"file": {
+				"/usr/libexec/khadas-fwupdate check": [ "exec" ],
+				"/usr/libexec/khadas-fwupdate download": [ "exec" ],
+				"/usr/libexec/khadas-fwupdate clean": [ "exec" ],
+				"/usr/libexec/khadas-fwupdate install 0": [ "exec" ],
+				"/usr/libexec/khadas-fwupdate install 1": [ "exec" ]
+			}
+		}
+	}
+}
