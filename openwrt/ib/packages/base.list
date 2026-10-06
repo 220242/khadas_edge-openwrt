@@ -21,3 +21,5 @@ kmod-fs-ext4
 ?zerotier
 ?luci-app-zt-gateway:zerotier
 ?luci-proto-wireguard
+# firmware update from the GitHub releases (System -> Firmware Update)
+luci-app-khadas-fwupdate
