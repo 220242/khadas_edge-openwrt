@@ -35,13 +35,17 @@ jobs:
       matrix:
         variant: [ edge-v, edge-v-kvm ]
     env:
-      OW_REL: v25.12.5
-      OW_VER: '25.12.5'
       SRC: /mnt/build/openwrt
       KVM: ${{ matrix.variant == 'edge-v-kvm' && '1' || '0' }}
       GH_TOKEN: ${{ secrets.KERNELS_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: OpenWrt version
+        run: |
+          v=$(cat openwrt/version)
+          echo "OW_VER=$v" >> "$GITHUB_ENV"
+          echo "OW_REL=v$v" >> "$GITHUB_ENV"
 
       - name: kernel key
         id: key
@@ -149,10 +153,14 @@ jobs:
   feed:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
-    env:
-      OW_VER: '25.12.5'
     steps:
       - uses: actions/checkout@v4
+
+      - name: OpenWrt version
+        run: |
+          v=$(cat openwrt/version)
+          echo "OW_VER=$v" >> "$GITHUB_ENV"
+          echo "OW_REL=v$v" >> "$GITHUB_ENV"
 
       - name: install build dependencies
         run: |
@@ -187,10 +195,14 @@ jobs:
       matrix:
         variant: [ x86-64-pc, x86-64-vm, i386-pc, edge-v-official, nanopi-r5c,
                    nanopi-zero2, orangepi-zero2, rpi-zero, rpi-zero2 ]
-    env:
-      OW_VER: '25.12.5'
     steps:
       - uses: actions/checkout@v4
+
+      - name: OpenWrt version
+        run: |
+          v=$(cat openwrt/version)
+          echo "OW_VER=$v" >> "$GITHUB_ENV"
+          echo "OW_REL=v$v" >> "$GITHUB_ENV"
 
       - name: install dependencies
         run: |
@@ -228,10 +240,14 @@ jobs:
       fail-fast: false
       matrix:
         variant: [ edge-v, edge-v-kvm ]
-    env:
-      OW_VER: '25.12.5'
     steps:
       - uses: actions/checkout@v4
+
+      - name: OpenWrt version
+        run: |
+          v=$(cat openwrt/version)
+          echo "OW_VER=$v" >> "$GITHUB_ENV"
+          echo "OW_REL=v$v" >> "$GITHUB_ENV"
 
       - name: install dependencies
         run: |
@@ -265,6 +281,17 @@ jobs:
     if: always() && startsWith(github.ref, 'refs/tags/v') && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-24.04
     steps:
+      # whole history + tags: release notes = change log since the previous tag
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: release notes
+        run: |
+          git fetch --force --tags origin
+          ./openwrt/release-notes.sh > release-notes.md
+          cat release-notes.md
+
       - uses: actions/download-artifact@v4
         with:
           pattern: openwrt-*
@@ -288,3 +315,4 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: rel/*
+          body_path: release-notes.md

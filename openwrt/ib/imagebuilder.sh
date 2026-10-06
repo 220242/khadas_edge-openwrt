@@ -23,7 +23,7 @@
 ##   rpi-zero2       Raspberry Pi Zero 2 W
 ##
 ## ENV
-##   OW_VER=25.12.5      OpenWrt release
+##   OW_VER=             OpenWrt release (default: openwrt/version)
 ##   FEED_OUT=out/feed   own feed packages (.apk, from sdk-feed.sh)
 ##   OUT=out             images go to $OUT/VARIANT
 ##   WORK=build/ib       ImageBuilders / downloads
@@ -270,8 +270,17 @@ EOF
 log "$VARIANT: $T/$S $PROFILE, packages:$pkgs"
 BIN=$WORK/bin-$VARIANT
 rm -rf "$BIN"
-make -C "$IB" image PROFILE="$PROFILE" PACKAGES="$pkgs" FILES="$FILES" \
-	${SIZE:+ROOTFS_PARTSIZE="$SIZE"} BIN_DIR="$BIN"
+# downloads.openwrt.org sometimes cuts a package download ("ADB integrity
+# error", "unexpected end of file"): apk then fails the whole image; the
+# packages already fetched stay in the ImageBuilder cache, so retry
+for try in 1 2 3; do
+	make -C "$IB" image PROFILE="$PROFILE" PACKAGES="$pkgs" FILES="$FILES" \
+		${SIZE:+ROOTFS_PARTSIZE="$SIZE"} BIN_DIR="$BIN" && break
+	[ "$try" -lt 3 ] || die "make image failed 3 times"
+	log "make image failed (try $try), retry in 30 s"
+	rm -rf "$BIN"
+	sleep 30
+done
 
 if [ "$KERNEL" = edge-v-kvm ]; then
 	# the QEMU of the kernel repository (edk2 UEFI), not the official one
@@ -289,7 +298,7 @@ pick() { ls "$BIN"/*"$1" 2>/dev/null | head -n 1 || true; }
 
 case "$VARIANT" in
 	edge-v|edge-v-kvm)
-		# names of the source build: openwrt-25.12.5-rockchip-armv8-khadas_edge-v[-kvm]-...
+		# names of the source build: openwrt-<version>-rockchip-armv8-khadas_edge-v[-kvm]-...
 		for f in "$BIN"/*khadas_edge-v*.img.gz "$BIN"/*khadas_edge-v*.manifest; do
 			[ -f "$f" ] || continue
 			b=$(basename "$f")

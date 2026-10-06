@@ -25,7 +25,7 @@ feeds="openwrt/feed/khadas-edge-display openwrt/feed/khadas-storage
        openwrt/feed/luci-app-khadas-storage openwrt/feed/luci-app-kvm"
 
 {
-	echo "release ${OW_REL:-v25.12.5} $VARIANT"
+	echo "release ${OW_REL:-v$(cat openwrt/version)} $VARIANT"
 	cat openwrt/kernel-rev
 	cat $cfgs | grep -v -e '^CONFIG_PACKAGE_' -e '^#' -e '^[[:space:]]*$' | LC_ALL=C sort
 	find $dirs $feeds -type f | LC_ALL=C sort | xargs sha256sum

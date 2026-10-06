@@ -8,7 +8,7 @@
 ##   ./openwrt/build.sh download   # prepare + download sources
 ##
 ## ENV
-##   OW_REL=v25.12.5   OpenWrt release tag
+##   OW_REL=v$(cat openwrt/version)   OpenWrt release tag
 ##   SRC=build/openwrt OpenWrt source tree
 ##   JOBS=$(nproc)
 ##   OUT=out           images output directory, the apk repository (every
@@ -29,7 +29,7 @@ set -euo pipefail
 TOP=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$TOP/.." && pwd)
 
-OW_REL=${OW_REL:-v25.12.5}
+OW_REL=${OW_REL:-v$(cat "$TOP/version")}
 OW_GIT=${OW_GIT:-https://github.com/openwrt/openwrt.git}
 # not exported further: the kernel build takes KVM from the environment
 # (virt/kvm/Makefile.kvm: KVM ?= ../../../virt/kvm)
