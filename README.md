@@ -54,6 +54,8 @@ Khadas Edge-V added as an OpenWrt device. Board specific files (dtb, dts, U-Boot
   + LXC, LuCI `Services → LXC Containers`
 + **Storage** - `System → Storage & Install`: install OpenWrt to a USB SSD / NVMe / eMMC / SD card,
   boot from USB / NVMe, expand the root filesystem to the whole disk, see [Storage](#storage-usb-ssd-nvme)
++ **Firmware update** - `System → Firmware Update`: finds the image of this device in the latest
+  GitHub release, checks its SHA256 and flashes it with sysupgrade, see [Firmware update](#firmware-update)
 + storage: USB, NVMe (M.2 adapter), ext4 / btrfs, 2 GB root partition
 
 ## Images
@@ -135,6 +137,7 @@ still override it for a local build.
 + [openwrt/feed](openwrt/feed) - own packages:
   `luci-app-zt-gateway` (ZeroTier gateway), `luci-app-docker-apps`
   (one click Docker apps), `khadas-storage` + `luci-app-khadas-storage` (install to disk, expand root),
+  `luci-app-khadas-fwupdate` (firmware update from the releases),
   `khadas-wifi-autoconf` (Wi-Fi AP setup), `khadas-edge-wifi-firmware` (AP6398S firmware),
   `khadas-edge-display` (HDMI console: `kmod-drm-rockchip`, `khadas-edge-console`)
 + [openwrt/files](openwrt/files) - rootfs overlay
@@ -220,6 +223,20 @@ is ignored while the eMMC still has its boot loader.
   "Boot from this disk", reboot. The kernel has USB storage, UAS and NVMe built in (root on USB / NVMe).
 + **Expand root to the whole disk**: grows the root partition, the overlay filesystem (f2fs / ext4) is
   resized on the next boot before it is mounted. Docker images can use the whole disk.
+
+## Firmware update
+
+`System → Firmware Update` (every image; command line: `/usr/libexec/khadas-fwupdate check|download|job|install 1`)
+
++ reads the latest release of this repository (`api.github.com`) and picks the image of this device:
+  `/etc/khadas-release` says which image it is (`VARIANT`, written by `openwrt/ib/imagebuilder.sh`);
+  Edge-V: the squashfs or ext4 image as the running root, x86-64-pc: the UEFI or BIOS image as booted
++ up to date when the release tag is the installed one (tag builds), otherwise an update when the release
+  was published after this image was built
++ download to `/tmp` (RAM), SHA256 checked against `SHA256SUMS` of the release, `sysupgrade -T`; then
+  "Install and reboot", with or without the settings
++ images from before this feature (no `/etc/khadas-release`) need one update by hand; own source builds of
+  the Edge-V are recognised by the board name
 
 ## Docker apps
 

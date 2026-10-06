@@ -134,6 +134,8 @@ CONFIG_PACKAGE_kmod-hwmon-pwmfan=y
 # install to USB SSD / NVMe / eMMC, boot from USB / NVMe, expand root (System -> Storage & Install)
 CONFIG_PACKAGE_khadas-storage=y
 CONFIG_PACKAGE_luci-app-khadas-storage=y
+# firmware update from the GitHub releases (System -> Firmware Update)
+CONFIG_PACKAGE_luci-app-khadas-fwupdate=y
 CONFIG_PACKAGE_block-mount=y
 CONFIG_PACKAGE_kmod-nvme=y
 CONFIG_PACKAGE_kmod-usb-storage=y

@@ -255,6 +255,17 @@ cat > "$FILES/etc/uci-defaults/90-board-name" <<EOF
 exit 0
 EOF
 chmod +x "$FILES/etc/uci-defaults/"*
+# which release images fit this one (luci-app-khadas-fwupdate): a tag build
+# is that release, any other build is newer than releases published before it
+tag=
+[ "${GITHUB_REF_TYPE:-}" = tag ] && tag=${GITHUB_REF_NAME:-}
+cat > "$FILES/etc/khadas-release" <<EOF
+VARIANT='$VARIANT'
+REPO='${GITHUB_REPOSITORY:-220242/khadas_edge-openwrt}'
+TAG='$tag'
+BUILD_DATE='$(date -u +%Y-%m-%dT%H:%M:%SZ)'
+COMMIT='${GITHUB_SHA:-}'
+EOF
 
 log "$VARIANT: $T/$S $PROFILE, packages:$pkgs"
 BIN=$WORK/bin-$VARIANT
