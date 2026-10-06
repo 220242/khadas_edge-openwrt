@@ -81,12 +81,12 @@ esac
 args=(-m 1024 -smp 2 -nographic -monitor none -serial "file:$CONSOLE" -no-reboot
 	-drive "$disk,if=virtio"
 	-nic "user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:$SSH_PORT-:22,hostfwd=tcp:127.0.0.1:$HTTPS_PORT-:443")
-if [ -w /dev/kvm ]; then
-	# i386: a 32-bit CPU model, the 32-bit kernel on "host" (64-bit EPYC) panics
-	if [ "$QEMU" = qemu-system-i386 ]; then cpu=kvm32; else cpu=host; fi
-	args+=(-enable-kvm -cpu "$cpu")
+# i386: always emulated; the 32-bit kernel on KVM of the CI runners (64-bit
+# AMD EPYC) panics with -cpu host and resets at random with -cpu kvm32
+if [ -w /dev/kvm ] && [ "$QEMU" = qemu-system-x86_64 ]; then
+	args+=(-enable-kvm -cpu host)
 else
-	log "no /dev/kvm: emulation, the boot is slow"
+	log "no KVM: emulation, the boot is slow"
 	# default CPU model: "max" crashes OVMF and warns on i386 SMP under TCG
 fi
 if [ "$FW" = uefi ]; then
@@ -112,7 +112,7 @@ run() { "${SSH[@]}" "$@" </dev/null; }
 ## wait for SSH with the default password (dropbear starts late in the boot)
 start=$SECONDS
 until run true 2>/dev/null; do
-	kill -0 "$QPID" 2>/dev/null || { cat "$WORK/qemu.out" >&2; tail -n 50 "$CONSOLE" >&2; die "QEMU exited"; }
+	kill -0 "$QPID" 2>/dev/null || { cat "$WORK/qemu.out" >&2; tail -n 50 "$CONSOLE" >&2; die "QEMU exited (guest reset or power off)"; }
 	grep -q 'Kernel panic' "$CONSOLE" && { grep -a -B 40 -m 1 'Kernel panic' "$CONSOLE" >&2; die "kernel panic"; }
 	[ $((SECONDS - start)) -lt "$TIMEOUT" ] || { tail -n 50 "$CONSOLE" >&2; die "no SSH login after $TIMEOUT s"; }
 	sleep 5
