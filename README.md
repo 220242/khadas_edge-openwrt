@@ -121,6 +121,12 @@ cd khadas_edge-openwrt
 OW_REL=v25.12.5 JOBS=8 ./openwrt/build.sh
 ```
 
+**OpenWrt version**: one file, [openwrt/version](openwrt/version) (`25.12.5`); `build.sh`,
+`kernel-key.sh`, `ib/*.sh` and the CI read it. Next release:
+`./openwrt/set-version.sh 25.12.6` (also updates the file names in this README), commit, push:
+the CI builds the new Edge-V kernels and every image. `OW_REL` / `OW_VER` in the environment
+still override it for a local build.
+
 + [openwrt/patches](openwrt/patches) - Khadas Edge-V device (U-Boot with HDMI), USB UAS built in
 + [openwrt/ib](openwrt/ib) - x86 images: `sdk-feed.sh` (own packages with the official SDK),
   `imagebuilder.sh x86-64-pc|x86-64-vm|i386-pc|edge-v-official|nanopi-r5c|nanopi-zero2|orangepi-zero2|rpi-zero|rpi-zero2`;
