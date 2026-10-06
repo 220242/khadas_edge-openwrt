@@ -1,0 +1,13 @@
+{
+	"admin/system/khadas-fwupdate": {
+		"title": "Firmware Update",
+		"order": 46,
+		"action": {
+			"type": "view",
+			"path": "khadas-fwupdate"
+		},
+		"depends": {
+			"acl": [ "luci-app-khadas-fwupdate" ]
+		}
+	}
+}
