@@ -56,7 +56,13 @@ Khadas Edge-V added as an OpenWrt device. Board specific files (dtb, dts, U-Boot
 ## Images
 
 GitHub Actions builds on every push (Actions → build → artifacts), a `v*` tag makes a release
-with all images (the firmware selector reads the releases):
+with all images (the firmware selector reads the releases).
+**Boot test**: the x86 images (VM qcow2, PC UEFI + BIOS, 32-bit) boot in QEMU on every build
+(job `smoke`, [openwrt/test/qemu-smoke.sh](openwrt/test/qemu-smoke.sh)): first boot scripts, DHCP
+uplink, LAN `192.168.77.1`, LuCI over HTTPS, SSH, services, Docker, `apk update`; a failed check
+stops the release. Locally: `apt install qemu-system-x86 ovmf sshpass`, then
+`./openwrt/test/qemu-smoke.sh x86-64-vm out/x86-64-vm` (`SMOKE_ONLINE=0` without Internet).
+
 
 | device | file | build |
 |---|---|---|
