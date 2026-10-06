@@ -11,9 +11,9 @@ on:
   workflow_dispatch:
   push:
     branches: [ nokvm, 'claude/**' ]
-    paths: [ '.github/workflows/snapshot.yml', 'openwrt/ib/common.sh' ]
+    paths: [ '.github/workflows/snapshot.yml', 'openwrt/ib/common.sh', 'openwrt/ib/sdk-board.sh' ]
   pull_request:
-    paths: [ '.github/workflows/snapshot.yml', 'openwrt/ib/common.sh' ]
+    paths: [ '.github/workflows/snapshot.yml', 'openwrt/ib/common.sh', 'openwrt/ib/sdk-board.sh' ]
 
 permissions:
   contents: read
@@ -72,6 +72,12 @@ jobs:
         with:
           name: snapshot-feed-packages
           path: out/feed
+
+      # HDMI kmod (external modules of the snapshot kernel) + storage
+      # packages, snapshot rockchip SDK, as in build.yml
+      - name: board packages
+        if: matrix.variant == 'edge-v-official'
+        run: ./openwrt/ib/sdk-board.sh
 
       - name: build ${{ matrix.variant }}
         run: ./openwrt/ib/imagebuilder.sh ${{ matrix.variant }}

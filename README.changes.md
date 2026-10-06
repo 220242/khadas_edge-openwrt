@@ -7,8 +7,21 @@
   downloads.openwrt.org/snapshots), every Monday and by hand (Actions → snapshot → Run workflow)
 + workflow artifacts `openwrt-SNAPSHOT-<variant>` (30 days), no release / tag; the stable
   25.12 builds stay as they are
-+ edge-v / edge-v-kvm (own source built kernel) are stable only
++ edge-v-official with the HDMI kmod and storage packages built by the snapshot rockchip SDK
+  (`sdk-board.sh`); edge-v / edge-v-kvm (own source built kernel) are stable only
 + `OW_VER=SNAPSHOT ./openwrt/ib/imagebuilder.sh <variant>` builds one locally
+
+## edge-v-official: HDMI console, root on a USB SSD
+
++ `edge-v-official` (official rockchip kernel) gets the HDMI console: the official kernel has DRM,
+  KMS / GEM DMA helpers and fbdev emulation, but no Rockchip display driver; `kmod-drm-rockchip`
+  (`openwrt/feed-official`) builds `rockchipdrm.ko` (VOP + DW HDMI) and `dw-hdmi.ko` from the
+  sources of the same kernel release as external modules with the official rockchip SDK
+  (`openwrt/ib/sdk-board.sh`, CI job `ib`), plus `khadas-edge-console` (login on HDMI, addresses);
+  kernel messages on HDMI (`console=tty1`, `boards/khadas-edge-v/boot/boot.cmd`)
++ `System → Storage & Install` (`khadas-storage`) in `edge-v-official`: install to a USB SSD / NVMe
+  and boot from it; the official kernel has USB storage and NVMe built in (UAS only as a module:
+  the root SSD runs in BOT mode)
 
 ## OpenWrt version in one file
 

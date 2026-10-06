@@ -222,6 +222,12 @@ jobs:
           name: feed-packages
           path: out/feed
 
+      # Edge-V on the official kernel: HDMI kmod (external modules of the
+      # official kernel) + storage packages, official rockchip SDK
+      - name: board packages
+        if: matrix.variant == 'edge-v-official'
+        run: ./openwrt/ib/sdk-board.sh
+
       - name: build ${{ matrix.variant }}
         run: ./openwrt/ib/imagebuilder.sh ${{ matrix.variant }}
 

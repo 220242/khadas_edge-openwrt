@@ -14,8 +14,9 @@
 ##   x86-64-vm       virtual machine x86_64: Proxmox / QEMU (qcow2), VMware
 ##                   (vmdk), VirtualBox (vdi), Hyper-V (vhdx), raw (img.gz)
 ##   i386-pc         32-bit PC, Pentium 4 and newer (BIOS)
-##   edge-v-official Khadas Edge-V on the official rockchip kernel (no HDMI
-##                   console, no root on USB SSD, official kmods)
+##   edge-v-official Khadas Edge-V on the official rockchip kernel: HDMI
+##                   console (own Rockchip DRM kmod, sdk-board.sh), root on
+##                   a USB SSD / NVMe, official kmods
 ##   nanopi-r5c      FriendlyElec NanoPi R5C
 ##   nanopi-zero2    FriendlyElec NanoPi Zero2 (RK3528, device added here)
 ##   orangepi-zero2  Xunlong Orange Pi Zero2 (H616)
@@ -114,13 +115,19 @@ fi
 ## kernel (official Image + the board dtb as FIT) from boards/BOARD
 inject_board() {
 	local dir="$IB_ROOT/boards/$1"
-	local DEVICE SOC LOADADDR VENDOR MODEL DTB UBOOT PACKAGES
+	local DEVICE SOC LOADADDR VENDOR MODEL DTB UBOOT PACKAGES BOOTSCRIPT=
 	. "$dir/board.conf"
 	local mk="$IB/target/linux/$T/image/$S.mk"
-	local kdir kver tmp
+	local kdir kver tmp script=
 
 	grep -q "^define Device/$DEVICE\$" "$mk" && return 0
 	log "add device $DEVICE ($VENDOR $MODEL) from boards/$1"
+
+	# own U-Boot boot script (kernel arguments), default: default.bootscript
+	if [ -n "$BOOTSCRIPT" ]; then
+		script=$1
+		cp "$dir/$BOOTSCRIPT" "$IB/target/linux/$T/image/$script.bootscript"
+	fi
 
 	cat >> "$mk" <<-EOF
 
@@ -130,6 +137,7 @@ inject_board() {
 	  DEVICE_MODEL := $MODEL
 	  DEVICE_DTS := $(basename "$DTB" .dtb)
 	  UBOOT_DEVICE_NAME := $UBOOT
+	  BOOT_SCRIPT := $script
 	  DEVICE_PACKAGES := $PACKAGES
 	endef
 	TARGET_DEVICES += $DEVICE
