@@ -1,1 +1,0 @@
-hostapd.conf.2g
