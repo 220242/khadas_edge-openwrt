@@ -9,6 +9,18 @@
 + CI job `boot-test` (KVM): x86-64-vm (qcow2, BIOS + UEFI), x86-64-pc (BIOS + UEFI images),
   i386-pc; a `v*` release waits for it, console logs are kept as artifacts
 
+## edge-v-official: HDMI console, root on a USB SSD
+
++ `edge-v-official` (official rockchip kernel) gets the HDMI console: the official kernel has DRM,
+  KMS / GEM DMA helpers and fbdev emulation, but no Rockchip display driver; `kmod-drm-rockchip`
+  (`openwrt/feed-official`) builds `rockchipdrm.ko` (VOP + DW HDMI) and `dw-hdmi.ko` from the
+  sources of the same kernel release as external modules with the official rockchip SDK
+  (`openwrt/ib/sdk-board.sh`, CI job `ib`), plus `khadas-edge-console` (login on HDMI, addresses);
+  kernel messages on HDMI (`console=tty1`, `boards/khadas-edge-v/boot/boot.cmd`)
++ `System → Storage & Install` (`khadas-storage`) in `edge-v-official`: install to a USB SSD / NVMe
+  and boot from it; the official kernel has USB storage and NVMe built in (UAS only as a module:
+  the root SSD runs in BOT mode)
+
 ## OpenWrt version in one file
 
 + `openwrt/version` holds the OpenWrt release (`25.12.5`); `build.sh`, `kernel-key.sh`,
