@@ -1,0 +1,30 @@
+# Rockchip DRM (VOP + Synopsys DW HDMI) as external modules for the
+# official kernel: the Kconfig options of drivers/gpu/drm/rockchip, only
+# what the RK3399 HDMI output needs
+
+ccflags-y += -DCONFIG_ROCKCHIP_VOP=1 -DCONFIG_ROCKCHIP_DW_HDMI=1
+
+# the HDMI / SCDC helpers of drm_display_helper (not in the official
+# kernel) linked into dw-hdmi.ko, renamed: no clash with a
+# drm_display_helper.ko that has them
+hdmi_helpers := drm_scdc_read drm_scdc_write drm_scdc_get_scrambling_status \
+	drm_scdc_set_scrambling drm_scdc_set_high_tmds_clock_ratio \
+	drm_hdmi_infoframe_set_hdr_metadata drm_hdmi_avi_infoframe_colorimetry \
+	drm_hdmi_avi_infoframe_bars drm_hdmi_avi_infoframe_content_type \
+	drm_hdmi_compute_mode_clock
+ccflags-y += $(foreach s,$(hdmi_helpers),-D$(s)=khadas_$(s))
+
+obj-m += dw-hdmi.o rockchipdrm.o
+
+dw-hdmi-y := \
+	drivers/gpu/drm/bridge/synopsys/dw-hdmi.o \
+	drivers/gpu/drm/display/drm_hdmi_helper.o \
+	drivers/gpu/drm/display/drm_scdc_helper.o
+
+rockchipdrm-y := \
+	drivers/gpu/drm/rockchip/rockchip_drm_drv.o \
+	drivers/gpu/drm/rockchip/rockchip_drm_fb.o \
+	drivers/gpu/drm/rockchip/rockchip_drm_gem.o \
+	drivers/gpu/drm/rockchip/rockchip_drm_vop.o \
+	drivers/gpu/drm/rockchip/rockchip_vop_reg.o \
+	drivers/gpu/drm/rockchip/dw_hdmi-rockchip.o

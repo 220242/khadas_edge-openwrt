@@ -28,7 +28,7 @@
       x86-64-pc    ПК / сервер x86_64 (официальный ImageBuilder, минуты)
       x86-64-vm    виртуальная машина: Proxmox qcow2, VMware vmdk, VirtualBox vdi, Hyper-V vhdx
       i386-pc      32-битный ПК (Pentium 4 и новее)
-      edge-v-official  Khadas Edge-V на официальном ядре (модули из репозитория OpenWrt)
+      edge-v-official  Khadas Edge-V на официальном ядре (модули из репозитория OpenWrt, HDMI, корень на USB SSD)
       nanopi-r5c, nanopi-zero2, orangepi-zero2, rpi-zero, rpi-zero2
       all          всё перечисленное
 
@@ -400,6 +400,10 @@ STEP=
 	if [ -n "$X86" ] && [ "$MODE" != prepare ]; then
 		echo "==> свои пакеты (официальный SDK)"
 		FEED_OUT="$OUT/feed" ./openwrt/ib/sdk-feed.sh
+		case " $X86 " in *" edge-v-official "*)
+			echo "==> HDMI-модуль и пакеты Edge-V (официальный SDK rockchip)"
+			FEED_OUT="$OUT/feed" ./openwrt/ib/sdk-board.sh ;;
+		esac
 		for v in $X86; do
 			echo "==> $v (официальный ImageBuilder)"
 			FEED_OUT="$OUT/feed" OUT="$OUT" ./openwrt/ib/imagebuilder.sh "$v"
