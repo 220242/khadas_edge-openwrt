@@ -1,6 +1,0 @@
-#!/bin/sh
-
-## hyphop ##
-
-avahi-browse --all --ignore-local --resolve --terminate
-

@@ -1,4 +1,0 @@
-# mainline uboot
-
-	load mmc $devnum $loadaddr /boot.cmd
-	script $loadaddr
