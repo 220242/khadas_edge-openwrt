@@ -1,0 +1,104 @@
+name: snapshot
+
+# OpenWrt SNAPSHOT (main branch, downloads.openwrt.org/snapshots) images of
+# the official ImageBuilder variants, next to the stable builds of build.yml.
+# Workflow artifacts only: no release, no tag. edge-v / edge-v-kvm need a
+# kernel built from source (khadas-kernels) and are stable only.
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'  # Monday 03:00 UTC
+  workflow_dispatch:
+  push:
+    branches: [ nokvm, 'claude/**' ]
+    paths: [ '.github/workflows/snapshot.yml', 'openwrt/ib/common.sh', 'openwrt/ib/sdk-board.sh' ]
+  pull_request:
+    paths: [ '.github/workflows/snapshot.yml', 'openwrt/ib/common.sh', 'openwrt/ib/sdk-board.sh' ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: snapshot-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  OW_VER: SNAPSHOT
+
+jobs:
+  feed:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang flex bison g++ gawk \
+            gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev \
+            python3-dev python3-setuptools python3-pyelftools rsync swig unzip \
+            zlib1g-dev file wget bzip2 zstd
+
+      - name: build feed packages
+        run: ./openwrt/ib/sdk-feed.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-feed-packages
+          path: out/feed/*.apk
+          retention-days: 7
+
+  ib:
+    needs: feed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [ x86-64-pc, x86-64-vm, i386-pc, edge-v-official, nanopi-r5c,
+                   nanopi-zero2, orangepi-zero2, rpi-zero, rpi-zero2 ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gawk gettext libncurses-dev \
+            libssl-dev python3 python3-setuptools rsync unzip zlib1g-dev file \
+            wget zstd qemu-utils u-boot-tools device-tree-compiler
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: snapshot-feed-packages
+          path: out/feed
+
+      # storage packages with the snapshot rockchip SDK; no HDMI console:
+      # the snapshot kernel (6.18) has no DRM fbdev emulation / framebuffer
+      # console, the Rockchip DRM kmod of feed-official is for 25.12
+      - name: board packages
+        if: matrix.variant == 'edge-v-official'
+        run: EDGE_HDMI=0 ./openwrt/ib/sdk-board.sh
+
+      - name: build ${{ matrix.variant }}
+        run: EDGE_HDMI=0 ./openwrt/ib/imagebuilder.sh ${{ matrix.variant }}
+
+      - name: snapshot revision
+        run: |
+          # target/subtarget of the ImageBuilder used (imagebuilder-x86-64)
+          d=$(ls -d build/ib/imagebuilder-* | head -n 1)
+          ts=${d##*/imagebuilder-}
+          rev=$(curl -fsSL --retry 3 "https://downloads.openwrt.org/snapshots/targets/${ts/-//}/version.buildinfo" || echo unknown)
+          echo "$rev" > out/${{ matrix.variant }}/snapshot-revision
+          {
+            echo "### ${{ matrix.variant }}: OpenWrt SNAPSHOT $rev"
+            echo '```'
+            ls -l out/${{ matrix.variant }}
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-SNAPSHOT-${{ matrix.variant }}
+          path: out/${{ matrix.variant }}/*
+          retention-days: 30

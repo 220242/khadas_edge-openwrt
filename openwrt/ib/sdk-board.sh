@@ -10,6 +10,8 @@
 ##
 ## ENV
 ##   OW_VER=            OpenWrt release (default: openwrt/version)
+##   EDGE_HDMI=0        storage packages only, no HDMI kmod / console
+##                      (SNAPSHOT: its kernel has no DRM fbdev console yet)
 ##   FEED_OUT=out/feed  where the .apk files go
 ##   WORK=build/ib      SDK / downloads
 
@@ -17,8 +19,13 @@ set -euo pipefail
 . "$(dirname "$0")/common.sh"
 
 # source package -> binary packages
-SRC_PKGS="khadas-edge-hdmi khadas-storage luci-app-khadas-storage"
-PKGS="kmod-drm-rockchip khadas-edge-console khadas-storage luci-app-khadas-storage"
+SRC_PKGS="khadas-storage luci-app-khadas-storage"
+PKGS="khadas-storage luci-app-khadas-storage"
+EDGE_HDMI=${EDGE_HDMI:-1}
+if [ "$EDGE_HDMI" = 1 ]; then
+	SRC_PKGS="khadas-edge-hdmi $SRC_PKGS"
+	PKGS="kmod-drm-rockchip khadas-edge-console $PKGS"
+fi
 # run time dependencies of khadas-storage (official packages): without these
 # the SDK would compile util-linux, f2fs-tools, e2fsprogs; the .apk files
 # still depend on them
@@ -42,7 +49,8 @@ echo "src-link khadas $IB_TOP/feed" >> feeds.conf
 log "feeds update"
 ./scripts/feeds update -a >/dev/null
 ./scripts/feeds install luci-base >/dev/null
-./scripts/feeds install -p khadasofc kmod-drm-rockchip khadas-edge-console >/dev/null
+[ "$EDGE_HDMI" = 1 ] &&
+	./scripts/feeds install -p khadasofc kmod-drm-rockchip khadas-edge-console >/dev/null
 ./scripts/feeds install -p khadas khadas-storage luci-app-khadas-storage >/dev/null
 ./scripts/feeds uninstall $HEAVY >/dev/null
 
@@ -55,6 +63,7 @@ for p in $PKGS; do
 	grep -q "^CONFIG_PACKAGE_$p=m" .config || die "$p not selectable in the SDK"
 done
 
+if [ "$EDGE_HDMI" = 1 ]; then
 # the official kernel: what the external modules link against
 kcfg=$(ls build_dir/target-*/linux-*/linux-*/.config | head -n 1)
 log "official kernel $(basename "$(dirname "$kcfg")"): $(grep -E \
@@ -63,6 +72,7 @@ log "official kernel $(basename "$(dirname "$kcfg")"): $(grep -E \
 grep -q '^CONFIG_DRM_FBDEV_EMULATION=y' "$kcfg" || die "official kernel without DRM fbdev emulation"
 grep -q '^CONFIG_FRAMEBUFFER_CONSOLE=y' "$kcfg" || die "official kernel without framebuffer console"
 grep -q '^CONFIG_DRM_ROCKCHIP=' "$kcfg" && die "official kernel has Rockchip DRM now, use its kmod"
+fi
 
 for p in $SRC_PKGS; do
 	log "compile $p"
@@ -77,6 +87,7 @@ for p in $PKGS; do
 done
 
 # the modules are in the package, built for this kernel
+if [ "$EDGE_HDMI" = 1 ]; then
 f=$(ls "$FEED_OUT"/kmod-drm-rockchip-*.apk)
 x=$WORK/kmod-check
 rm -rf "$x"
@@ -90,6 +101,7 @@ for m in dw-hdmi rockchipdrm; do
 	strings "$ko" | grep -q "^vermagic=$kver " || die "$m.ko: not built for $kver"
 done
 log "$(basename "$f"): $(cd "$x" && find lib -type f | tr '\n' ' ')"
+fi
 
 log "board packages: $FEED_OUT"
 ls -l "$FEED_OUT"
