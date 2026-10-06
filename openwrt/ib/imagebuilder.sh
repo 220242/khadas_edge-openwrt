@@ -23,7 +23,8 @@
 ##   rpi-zero2       Raspberry Pi Zero 2 W
 ##
 ## ENV
-##   OW_VER=             OpenWrt release (default: openwrt/version)
+##   OW_VER=             OpenWrt release (default: openwrt/version), SNAPSHOT:
+##                       main branch (no edge-v / edge-v-kvm)
 ##   FEED_OUT=out/feed   own feed packages (.apk, from sdk-feed.sh)
 ##   OUT=out             images go to $OUT/VARIANT
 ##   WORK=build/ib       ImageBuilders / downloads
@@ -89,7 +90,7 @@ if [ -n "$KERNEL" ]; then
 		echo "$APK_REPO/targets/packages.adb"
 		echo "$APK_REPO/khadas/packages.adb"
 		for f in base packages luci routing telephony video; do
-			echo "$OW_MIRROR/releases/$OW_VER/packages/$arch/$f/packages.adb"
+			echo "$OW_MIRROR/$OW_PATH/packages/$arch/$f/packages.adb"
 		done
 	} > "$IB/repositories"
 	log "repositories: $(tr '\n' ' ' < "$IB/repositories")"

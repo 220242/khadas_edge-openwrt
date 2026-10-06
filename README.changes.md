@@ -1,5 +1,15 @@
 # OpenWrt Khadas Change log
 
+## OpenWrt SNAPSHOT builds
+
++ workflow `snapshot`: the ImageBuilder variants (x86-64-pc, x86-64-vm, i386-pc, edge-v-official,
+  nanopi-r5c, nanopi-zero2, orangepi-zero2, rpi-zero, rpi-zero2) on OpenWrt SNAPSHOT (main branch,
+  downloads.openwrt.org/snapshots), every Monday and by hand (Actions → snapshot → Run workflow)
++ workflow artifacts `openwrt-SNAPSHOT-<variant>` (30 days), no release / tag; the stable
+  25.12 builds stay as they are
++ edge-v / edge-v-kvm (own source built kernel) are stable only
++ `OW_VER=SNAPSHOT ./openwrt/ib/imagebuilder.sh <variant>` builds one locally
+
 ## OpenWrt version in one file
 
 + `openwrt/version` holds the OpenWrt release (`25.12.5`); `build.sh`, `kernel-key.sh`,
