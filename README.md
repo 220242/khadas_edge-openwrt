@@ -137,6 +137,10 @@ still override it for a local build.
 + [openwrt/ib](openwrt/ib) - x86 images: `sdk-feed.sh` (own packages with the official SDK),
   `imagebuilder.sh x86-64-pc|x86-64-vm|i386-pc|edge-v-official|nanopi-r5c|nanopi-zero2|orangepi-zero2|rpi-zero|rpi-zero2`;
   boards OpenWrt does not have (Edge-V, NanoPi Zero2) are added from `boards/*/board.conf` (dtb, U-Boot)
++ [openwrt/ib/boot-test.sh](openwrt/ib/boot-test.sh) - boot test of an x86 image in QEMU
+  (`boot-test.sh out/x86-64-vm/openwrt-25.12.5-x86-64-vm.qcow2 [bios|uefi]`, needs `qemu-system-x86`,
+  `qemu-utils`, `ovmf`, `sshpass`): SSH and LuCI with the default password, DHCP uplink, first boot
+  scripts, services, Docker; CI runs it for x86-64-vm, x86-64-pc and i386-pc before a release
 + [openwrt/diffconfig](openwrt/diffconfig) - package selection
 + [openwrt/feed](openwrt/feed) - own packages:
   `luci-app-zt-gateway` (ZeroTier gateway), `luci-app-docker-apps`
