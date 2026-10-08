@@ -4,6 +4,8 @@
 OW_MIRROR=${OW_MIRROR:-https://downloads.openwrt.org}
 IB_TOP=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)	# openwrt/
 OW_VER=${OW_VER:-$(cat "$IB_TOP/version")}	# OpenWrt release: openwrt/version
+# OW_VER=SNAPSHOT: daily builds of the main branch ($OW_MIRROR/snapshots)
+if [ "$OW_VER" = SNAPSHOT ]; then OW_PATH=snapshots; else OW_PATH=releases/$OW_VER; fi
 IB_ROOT=$(cd "$IB_TOP/.." && pwd)
 WORK=${WORK:-$IB_ROOT/build/ib}
 DL=${DL:-$WORK/dl}
@@ -15,7 +17,7 @@ die() { echo "[e] $*" >&2; exit 1; }
 #   download (sha256 checked, cached in $DL) and unpack the official tool
 fetch_tool() {
 	local kind="$1" target="$2" sub="$3" dir="$4"
-	local base="$OW_MIRROR/releases/$OW_VER/targets/$target/$sub"
+	local base="$OW_MIRROR/$OW_PATH/targets/$target/$sub"
 	local line sum file
 
 	mkdir -p "$DL"
